@@ -6,6 +6,7 @@ import akka.http.scaladsl.server.Route
 import com.softwaremill.session.{HeaderConfig, SessionConfig, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import com.softwaremill.session.SessionOptions._
+import org.zarucki.rest.BattleshipSession.UniqueId
 
 import scala.concurrent.ExecutionContext
 
@@ -13,8 +14,10 @@ class GameRoutingSpec extends BaseRouteSpec {
   val headerName = "Set-Auth-Token"
   val testExecutor = executor
   val testSecret64characterLong = "x" * 64
-  val userUuidPickedAtRandom = UUID.randomUUID()
-  val gameUuidPickedAtRandom = UUID.randomUUID()
+  val player1UUIDPickedAtRandom = UUID.randomUUID()
+  val player2UUIDPickedAtRandom = UUID.randomUUID()
+  val gameUUIDPickedAtRandom = UUID.randomUUID()
+
   implicit val testSessionManager =
     new SessionManager[BattleshipSession](
       SessionConfig
@@ -27,24 +30,37 @@ class GameRoutingSpec extends BaseRouteSpec {
     override implicit def executor: ExecutionContext = testExecutor
     override implicit def sessionCreator: SessionCreator = new SessionCreator {
       override def newSession(): BattleshipSession =
-        BattleshipSession(userId = userUuidPickedAtRandom, gameId = gameUuidPickedAtRandom)
+        BattleshipSession(playerId = player1UUIDPickedAtRandom, gameId = gameUUIDPickedAtRandom)
+      override def newSessionForGame(gameId: UniqueId): BattleshipSession =
+        BattleshipSession(playerId = player2UUIDPickedAtRandom, gameId = gameId)
     }
   }.routes)
 
   it should "set correct header when sent POST to /game" in {
     Post("/game") ~> routes ~> check {
       header(headerName).flatMap(extractSession).value shouldEqual BattleshipSession(
-        userId = userUuidPickedAtRandom,
-        gameId = gameUuidPickedAtRandom
+        playerId = player1UUIDPickedAtRandom,
+        gameId = gameUUIDPickedAtRandom
       )
       status shouldEqual StatusCodes.OK
       responseAs[String] shouldEqual "new game"
     }
   }
 
+  it should "return another valid session for given game when joining not full game" in {
+    Post(s"/game/$gameUUIDPickedAtRandom/join") ~> routes ~> check {
+      status shouldEqual StatusCodes.OK
+      header(headerName).flatMap(extractSession).value shouldEqual BattleshipSession(
+        playerId = player2UUIDPickedAtRandom,
+        gameId = gameUUIDPickedAtRandom
+      )
+      responseAs[String] shouldEqual "game state"
+    }
+  }
+
   it should "return game state with correct session" in {
     withValidSession(1) { addSessionTransform =>
-      Get(s"/game/$gameUuidPickedAtRandom") ~> addSessionTransform ~> routes ~> check {
+      Get(s"/game/$gameUUIDPickedAtRandom") ~> addSessionTransform ~> routes ~> check {
         status shouldEqual StatusCodes.OK
         responseAs[String] shouldEqual "game state"
       }
@@ -60,7 +76,7 @@ class GameRoutingSpec extends BaseRouteSpec {
   }
 
   it should "return forbidden if missing required session" in {
-    Get(s"/game/$gameUuidPickedAtRandom") ~> routes ~> check {
+    Get(s"/game/$gameUUIDPickedAtRandom") ~> routes ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }

@@ -30,18 +30,18 @@ abstract class BattleshipSessionSupport extends SessionSupport[BattleshipSession
     }
 }
 
-case class BattleshipSession(userId: UniqueId, gameId: UniqueId)
+case class BattleshipSession(playerId: UniqueId, gameId: UniqueId)
 
 object BattleshipSession {
   type UniqueId = java.util.UUID
   implicit val serializer: SessionSerializer[BattleshipSession, String] =
     new MultiValueSessionSerializer[BattleshipSession](
-      (t: BattleshipSession) => Map("userid" -> t.userId.toString, "gameid" -> t.gameId.toString),
-      m => Try { BattleshipSession(userId = UUID.fromString(m("userid")), gameId = UUID.fromString(m("gameid"))) }
+      (t: BattleshipSession) => Map("userid" -> t.playerId.toString, "gameid" -> t.gameId.toString),
+      m => Try { BattleshipSession(playerId = UUID.fromString(m("userid")), gameId = UUID.fromString(m("gameid"))) }
     )
 }
 
 trait SessionCreator {
-  def newSession(): BattleshipSession = BattleshipSession(userId = UUID.randomUUID(), gameId = UUID.randomUUID())
-  def newSessionForGame(gameId: UniqueId) = BattleshipSession(userId = UUID.randomUUID(), gameId = gameId)
+  def newSession(): BattleshipSession = BattleshipSession(playerId = UUID.randomUUID(), gameId = UUID.randomUUID())
+  def newSessionForGame(gameId: UniqueId) = BattleshipSession(playerId = UUID.randomUUID(), gameId = gameId)
 }

@@ -36,8 +36,9 @@ trait GameRouting extends BattleshipSessionSupport {
               logger.info(s"POST /game/$gameUUID/join")
               val otherPlayerSession = sessionCreator.newSessionForGame(gameUUID)
 
+              // TODO: check if game server already full?
               setGameSession(otherPlayerSession) {
-                complete(StatusCodes.OK)
+                complete("game state")
               }
             }
           } ~
