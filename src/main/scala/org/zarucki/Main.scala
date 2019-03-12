@@ -56,11 +56,10 @@ object Main extends App with StrictLogging {
     }
   }
 
-  def exceptionHandler = {
+  def exceptionHandler =
     ExceptionHandler {
       case NonFatal(ex: Exception) =>
         logger.error("I crashed hard.", ex)
         complete(StatusCodes.BadRequest)
     }
-  }
 }
