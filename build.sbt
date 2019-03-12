@@ -8,20 +8,22 @@ scalacOptions ++= Seq("-deprecation", "-feature", "-Xlint", "-opt:l:inline", "-o
 
 javacOptions ++= Seq("-Xlint")
 
+val slf4jVersion        = "1.7.25"
+val logBackVersion      = "1.2.3"
+val scalaLoggingVersion = "3.9.2"
 val scalaTestVersion = "3.0.5"
-val log4jVersion = "2.11.2"
 val circeVersion = "0.11.1"
+
+val slf4jApi       = "org.slf4j" % "slf4j-api" % slf4jVersion
+val logBackClassic = "ch.qos.logback" % "logback-classic" % logBackVersion
+val scalaLogging   = "com.typesafe.scala-logging" %% "scala-logging" % scalaLoggingVersion
+val loggingStack   = Seq(slf4jApi, logBackClassic, scalaLogging)
+
+libraryDependencies ++= loggingStack
 
 libraryDependencies ++= Seq(
 	"org.scalactic" %% "scalactic" % scalaTestVersion,
 	"org.scalatest" %% "scalatest" % scalaTestVersion % "test"
-)
-
-libraryDependencies ++= Seq(
-	"org.apache.logging.log4j" % "log4j-slf4j-impl" % log4jVersion,
-	"org.apache.logging.log4j" % "log4j-api" % log4jVersion,
-	"org.apache.logging.log4j" % "log4j-core" % log4jVersion,
-	"org.apache.logging.log4j" %% "log4j-api-scala" % "11.0"
 )
 
 libraryDependencies ++= Seq(
