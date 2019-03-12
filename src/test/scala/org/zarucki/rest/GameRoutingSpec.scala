@@ -16,23 +16,24 @@ class GameRoutingSpec extends BaseRouteSpec {
   val userUuidPickedAtRandom = UUID.randomUUID()
   val gameUuidPickedAtRandom = UUID.randomUUID()
   implicit val testSessionManager =
-    new SessionManager[Session](
+    new SessionManager[BattleshipSession](
       SessionConfig
         .defaultConfig(testSecret64characterLong)
         .copy(sessionHeaderConfig = HeaderConfig(headerName, headerName))
     )
 
   val routes = Route.seal(new GameRouting with StrictLogging {
-    override implicit def sessionManager: SessionManager[Session] = testSessionManager
+    override implicit def sessionManager: SessionManager[BattleshipSession] = testSessionManager
     override implicit def executor: ExecutionContext = testExecutor
     override implicit def sessionCreator: SessionCreator = new SessionCreator {
-      override def newSession(): Session = Session(userId = userUuidPickedAtRandom, gameId = gameUuidPickedAtRandom)
+      override def newSession(): BattleshipSession =
+        BattleshipSession(userId = userUuidPickedAtRandom, gameId = gameUuidPickedAtRandom)
     }
   }.routes)
 
   it should "set correct header when sent POST to /game" in {
     Post("/game") ~> routes ~> check {
-      header(headerName).flatMap(extractSession).value shouldEqual Session(
+      header(headerName).flatMap(extractSession).value shouldEqual BattleshipSession(
         userId = userUuidPickedAtRandom,
         gameId = gameUuidPickedAtRandom
       )
@@ -50,22 +51,21 @@ class GameRoutingSpec extends BaseRouteSpec {
     }
   }
 
-  it should "return error if session game id does not match url game id" in {
+  it should "return forbidden if session game id does not match url game id" in {
     withValidSession(1) { addSessionTransform =>
       Get(s"/game/${UUID.randomUUID()}") ~> addSessionTransform ~> routes ~> check {
         status shouldEqual StatusCodes.Forbidden
-        responseAs[String] shouldEqual "Game id not matching session."
       }
     }
   }
 
-  it should "return Forbidden if missing required session" in {
+  it should "return forbidden if missing required session" in {
     Get(s"/game/$gameUuidPickedAtRandom") ~> routes ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
 
-  private def extractSession(httpHeader: HttpHeader): Option[Session] =
+  private def extractSession(httpHeader: HttpHeader): Option[BattleshipSession] =
     oneOff.clientSessionManager.decode(httpHeader.value()).toOption
 
   private def withValidSession(gameId: Int)(body: RequestTransformer => Unit) =
