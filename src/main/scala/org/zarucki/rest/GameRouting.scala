@@ -47,15 +47,9 @@ trait GameRouting extends SessionSupport[Session] {
                 get {
                   logger.info(s"GET /game/$gameId")
 
-                  session[Session](oneOff, usingHeaders) { sessionResult =>
-                    sessionResult.toOption match {
-                      case Some(session) =>
-                        logger.info("got userid: " + session.userId)
-                        complete("game state")
-                      case _ =>
-                        logger.warn("Missing required session!")
-                        complete(StatusCodes.Forbidden -> "Missing session")
-                    }
+                  requiredSession(oneOff, usingHeaders) { session =>
+                    logger.info("got userid: " + session.userId)
+                    complete("game state")
                   }
                 }
             }

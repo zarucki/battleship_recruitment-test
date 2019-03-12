@@ -48,7 +48,6 @@ class GameRoutingSpec extends BaseRouteSpec {
   it should "asking for game state without session should result in Forbidden code" in {
     Get(s"/game/$gameId") ~> routes ~> check {
       status shouldEqual StatusCodes.Forbidden
-      responseAs[String] shouldEqual "Missing session"
     }
   }
 
