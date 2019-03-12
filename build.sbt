@@ -22,6 +22,7 @@ val scalaLoggingVersion = "3.9.2"
 val scalaTestVersion = "3.0.5"
 val circeVersion = "0.11.1"
 val akkaHttpVersion = "10.1.7"
+val akkaHttpSession = "0.5.6"
 
 val slf4jApi = "org.slf4j" % "slf4j-api" % slf4jVersion
 val logBackClassic = "ch.qos.logback" % "logback-classic" % logBackVersion
@@ -35,16 +36,19 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % scalaTestVersion % "test"
 )
 
+
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-stream" % "2.5.20",
   "com.typesafe.akka" %% "akka-testkit" % "2.5.20" % Test,
   "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
   "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpVersion % Test,
-  "de.heikoseeberger" %% "akka-http-circe" % "1.25.2"
+  "de.heikoseeberger" %% "akka-http-circe" % "1.25.2",
+  "com.softwaremill.akka-http-session" %% "core" % akkaHttpSession,
+  "com.softwaremill.akka-http-session" %% "jwt"  % akkaHttpSession
 )
 
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-core",
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-parser"
-).map(_ % circeVersion withSources () withJavadoc ())
+).map(_ % circeVersion)

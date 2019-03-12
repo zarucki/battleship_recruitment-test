@@ -5,10 +5,11 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive, ExceptionHandler, RejectionHandler}
 import akka.stream.ActorMaterializer
+import com.softwaremill.session.{RefreshTokenStorage, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
-import org.zarucki.rest.GameRouting
+import org.zarucki.rest.{GameRouting, Session, SessionCreator}
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.io.StdIn
 import scala.util.control.NonFatal
 
@@ -22,7 +23,11 @@ object Main extends App with StrictLogging {
 
   val appConfig: AppConfig = AppConfig(httpRestApiPort = 8080)
 
-  val gamingRoutes = new GameRouting with StrictLogging
+  val gamingRoutes = new GameRouting with StrictLogging {
+    override implicit def executor: ExecutionContext = executionContext
+    override implicit def sessionManager: SessionManager[Session] = ???
+    override implicit def sessionCreator: SessionCreator = ???
+  }
 
   val bindingFuture = Http().bindAndHandle(
     handler = routeWrappers {
