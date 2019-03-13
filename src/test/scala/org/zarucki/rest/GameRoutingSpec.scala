@@ -6,7 +6,7 @@ import akka.http.scaladsl.server.Route
 import com.softwaremill.session.{HeaderConfig, SessionConfig, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import com.softwaremill.session.SessionOptions._
-import org.zarucki.rest.BattleshipSession.UniqueId
+import org.zarucki.rest.GameSession.UniqueId
 
 import scala.concurrent.ExecutionContext
 
@@ -19,26 +19,26 @@ class GameRoutingSpec extends BaseRouteSpec {
   val gameUUIDPickedAtRandom = UUID.randomUUID()
 
   implicit val testSessionManager =
-    new SessionManager[BattleshipSession](
+    new SessionManager[GameSession](
       SessionConfig
         .defaultConfig(testSecret64characterLong)
         .copy(sessionHeaderConfig = HeaderConfig(headerName, headerName))
     )
 
   val routes = Route.seal(new GameRouting with StrictLogging {
-    override implicit def sessionManager: SessionManager[BattleshipSession] = testSessionManager
+    override implicit def sessionManager: SessionManager[GameSession] = testSessionManager
     override implicit def executor: ExecutionContext = testExecutor
     override implicit def sessionCreator: SessionCreator = new SessionCreator {
-      override def newSession(): BattleshipSession =
-        BattleshipSession(playerId = player1UUIDPickedAtRandom, gameId = gameUUIDPickedAtRandom)
-      override def newSessionForGame(gameId: UniqueId): BattleshipSession =
-        BattleshipSession(playerId = player2UUIDPickedAtRandom, gameId = gameId)
+      override def newSession(): GameSession =
+        GameSession(playerId = player1UUIDPickedAtRandom, gameId = gameUUIDPickedAtRandom)
+      override def newSessionForGame(gameId: UniqueId): GameSession =
+        GameSession(playerId = player2UUIDPickedAtRandom, gameId = gameId)
     }
   }.routes)
 
   it should "set correct header when sent POST to /game" in {
     Post("/game") ~> routes ~> check {
-      header(headerName).flatMap(extractSession).value shouldEqual BattleshipSession(
+      header(headerName).flatMap(extractSession).value shouldEqual GameSession(
         playerId = player1UUIDPickedAtRandom,
         gameId = gameUUIDPickedAtRandom
       )
@@ -50,7 +50,7 @@ class GameRoutingSpec extends BaseRouteSpec {
   it should "return another valid session for given game when joining not full game" in {
     Post(s"/game/$gameUUIDPickedAtRandom/join") ~> routes ~> check {
       status shouldEqual StatusCodes.OK
-      header(headerName).flatMap(extractSession).value shouldEqual BattleshipSession(
+      header(headerName).flatMap(extractSession).value shouldEqual GameSession(
         playerId = player2UUIDPickedAtRandom,
         gameId = gameUUIDPickedAtRandom
       )
@@ -81,7 +81,7 @@ class GameRoutingSpec extends BaseRouteSpec {
     }
   }
 
-  private def extractSession(httpHeader: HttpHeader): Option[BattleshipSession] =
+  private def extractSession(httpHeader: HttpHeader): Option[GameSession] =
     oneOff.clientSessionManager.decode(httpHeader.value()).toOption
 
   private def withValidSession(gameId: Int)(body: RequestTransformer => Unit) =

@@ -7,7 +7,7 @@ import akka.http.scaladsl.server.{Directive, ExceptionHandler, RejectionHandler}
 import akka.stream.ActorMaterializer
 import com.softwaremill.session.{RefreshTokenStorage, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
-import org.zarucki.rest.{BattleshipSession, GameRouting, SessionCreator}
+import org.zarucki.rest.{GameRouting, GameSession, SessionCreator}
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.io.StdIn
@@ -25,7 +25,7 @@ object Main extends App with StrictLogging {
 
   val gamingRoutes = new GameRouting with StrictLogging {
     override implicit def executor: ExecutionContext = executionContext
-    override implicit def sessionManager: SessionManager[BattleshipSession] = ???
+    override implicit def sessionManager: SessionManager[GameSession] = ???
     override implicit def sessionCreator: SessionCreator = ???
   }
 
