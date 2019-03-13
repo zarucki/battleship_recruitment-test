@@ -35,7 +35,9 @@ trait GameRouting extends SessionSupport[UserSession] {
         post {
           val session: UserSession = sessionCreator.newSession()
 
+          // TODO: what if someone comes with already valid session
           // TODO: check if we overwritten something? what to do then?
+          // TODO: should one person be able to start multiple games at once?
           val newGameId = gameStateStore.saveNewGame(new TwoPlayersGameState(hostPlayerId = session.userId))
 
           extractUri { uri =>
@@ -67,7 +69,7 @@ trait GameRouting extends SessionSupport[UserSession] {
                           _.copy(otherPlayerId = Some(otherPlayerSession.userId))
                         )
 
-                        val result = complete("game state")
+                        val result = complete(s"game state $gameUUID")
                         if (optSession.isDefined) {
                           result
                         } else {

@@ -22,20 +22,24 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   val serverPort = 8080
   val testExecutor = executor
   val testSecret64characterLong = "x" * 64
-  val player1UUIDPickedAtRandom = UUID.randomUUID()
-  val player2UUIDPickedAtRandom = UUID.randomUUID()
-  val gameUUIDPickedAtRandom = UUID.randomUUID()
-  var idsToGive: List[UniqueId] = _
+  val (player1UUIDPickedAtRandom, player2UUIDPickedAtRandom) = (UUID.randomUUID(), UUID.randomUUID())
+  val (game1UUIDPickedAtRandom, game2UUIDPickedAtRandom) = (UUID.randomUUID(), UUID.randomUUID())
+  var gameIdsToGive: List[UniqueId] = _
+  var userIdsToGive: List[UniqueId] = _
 
   val testGameStateStore = new InMemoryGameStateStore[TwoPlayersGameState] {
     override def saveNewGame(newGame: TwoPlayersGameState): UniqueId = {
-      concurrentStorage.put(gameUUIDPickedAtRandom, newGame)
-      gameUUIDPickedAtRandom
+      val newGameId = gameIdsToGive.head
+      gameIdsToGive = gameIdsToGive.tail
+      concurrentStorage.put(newGameId, newGame)
+      newGameId
     }
   }
 
-  override protected def beforeEach(): Unit =
-    idsToGive = List(player1UUIDPickedAtRandom, player2UUIDPickedAtRandom, UUID.randomUUID())
+  override protected def beforeEach(): Unit = {
+    gameIdsToGive = List(game1UUIDPickedAtRandom, game2UUIDPickedAtRandom, UUID.randomUUID())
+    userIdsToGive = List(player1UUIDPickedAtRandom, player2UUIDPickedAtRandom, UUID.randomUUID())
+  }
 
   override protected def afterEach(): Unit =
     testGameStateStore.clear()
@@ -52,8 +56,8 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     override implicit val executor: ExecutionContext = testExecutor
     override implicit val sessionCreator: SessionCreator = new SessionCreator {
       override def newSession(): UserSession = {
-        val newUserId = idsToGive.head
-        idsToGive = idsToGive.tail
+        val newUserId = userIdsToGive.head
+        userIdsToGive = userIdsToGive.tail
         UserSession(userId = newUserId)
       }
     }
@@ -68,10 +72,10 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
 
       status shouldEqual StatusCodes.OK
       entityAs[GameInvitation] shouldEqual GameInvitation(
-        s"http://$serverHostName:$serverPort/game/$gameUUIDPickedAtRandom/join"
+        s"http://$serverHostName:$serverPort/game/$game1UUIDPickedAtRandom/join"
       )
 
-      testGameStateStore.getGameById(gameUUIDPickedAtRandom).value shouldEqual TwoPlayersGameState(
+      testGameStateStore.getGameById(game1UUIDPickedAtRandom).value shouldEqual TwoPlayersGameState(
         hostPlayerId = player1UUIDPickedAtRandom,
         otherPlayerId = None
       )
@@ -79,27 +83,48 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   }
 
   it should "return not found if game was not created before and we try to join it" in {
-    Post(s"/game/$gameUUIDPickedAtRandom/join") ~> routes ~> check {
+    Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
       status shouldEqual StatusCodes.NotFound
+    }
+  }
+
+  it should "return already in game for a player that hosted game if he tries to join it" in {
+    createGameAndGetValidSession { addSessionTransform =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> addSessionTransform ~> routes ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] shouldEqual "Already in game."
+      }
+    }
+  }
+
+  it should "join player to another game and not set new session, if he is already in some other game" in {
+    createGameAndGetValidSession { firstGameSessionTransform =>
+      createGameAndGetValidSession { _ =>
+        Post(s"/game/$game2UUIDPickedAtRandom/join") ~> firstGameSessionTransform ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+          header(headerName).isEmpty shouldEqual true
+          responseAs[String] shouldEqual s"game state $game2UUIDPickedAtRandom"
+        }
+      }
     }
   }
 
   it should "return valid session for another player, given game when joining not full game" in {
     createGameAndGetValidSession { _ =>
-      Post(s"/game/$gameUUIDPickedAtRandom/join") ~> routes ~> check {
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
         status shouldEqual StatusCodes.OK
         header(headerName).flatMap(extractSession).value shouldEqual UserSession(
           userId = player2UUIDPickedAtRandom,
         )
-        responseAs[String] shouldEqual "game state"
+        responseAs[String] shouldEqual s"game state $game1UUIDPickedAtRandom"
       }
     }
   }
 
   it should "return forbidden if game already full" in {
     createGameAndGetValidSession { _ =>
-      Post(s"/game/$gameUUIDPickedAtRandom/join") ~> routes ~> check {
-        Post(s"/game/$gameUUIDPickedAtRandom/join") ~> routes ~> check {
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
           status shouldEqual StatusCodes.Forbidden
           responseAs[String] shouldEqual "Game already full."
         }
@@ -109,7 +134,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
 
   it should "return game state with correct session" in {
     createGameAndGetValidSession { addSessionTransform =>
-      Get(s"/game/$gameUUIDPickedAtRandom") ~> addSessionTransform ~> routes ~> check {
+      Get(s"/game/$game1UUIDPickedAtRandom") ~> addSessionTransform ~> routes ~> check {
         status shouldEqual StatusCodes.OK
         responseAs[String] shouldEqual "game state"
       }
@@ -125,7 +150,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   }
 
   it should "return forbidden if missing required session" in {
-    Get(s"/game/$gameUUIDPickedAtRandom") ~> routes ~> check {
+    Get(s"/game/$game1UUIDPickedAtRandom") ~> routes ~> check {
       status shouldEqual StatusCodes.Forbidden
     }
   }
