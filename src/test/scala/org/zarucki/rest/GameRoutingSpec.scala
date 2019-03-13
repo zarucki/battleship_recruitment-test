@@ -1,17 +1,22 @@
 package org.zarucki.rest
 import java.util.UUID
 
-import akka.http.scaladsl.model.{HttpHeader, StatusCodes}
+import akka.http.scaladsl.model.headers.Host
+import akka.http.scaladsl.model.{HttpHeader, HttpProtocol, StatusCodes}
 import akka.http.scaladsl.server.Route
 import com.softwaremill.session.{HeaderConfig, SessionConfig, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import com.softwaremill.session.SessionOptions._
 import org.zarucki.rest.GameSession.UniqueId
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.generic.auto._
 
 import scala.concurrent.ExecutionContext
 
 class GameRoutingSpec extends BaseRouteSpec {
   val headerName = "Set-Auth-Token"
+  val serverHostName = "battleship-game.com"
+  val serverPort = 8080
   val testExecutor = executor
   val testSecret64characterLong = "x" * 64
   val player1UUIDPickedAtRandom = UUID.randomUUID()
@@ -37,13 +42,16 @@ class GameRoutingSpec extends BaseRouteSpec {
   }.routes)
 
   it should "set correct header when sent POST to /game" in {
-    Post("/game") ~> routes ~> check {
+    Post("/game") ~> Host(serverHostName, serverPort) ~> routes ~> check {
       header(headerName).flatMap(extractSession).value shouldEqual GameSession(
         playerId = player1UUIDPickedAtRandom,
         gameId = gameUUIDPickedAtRandom
       )
+
       status shouldEqual StatusCodes.OK
-      responseAs[String] shouldEqual "new game"
+      entityAs[GameInvitation] shouldEqual GameInvitation(
+        s"http://$serverHostName:$serverPort/game/$gameUUIDPickedAtRandom/join"
+      )
     }
   }
 

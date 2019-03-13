@@ -1,6 +1,7 @@
 package org.zarucki.rest
 
 import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.model.Uri.Path
 import com.softwaremill.session.SessionDirectives
 import com.typesafe.scalalogging.Logger
 import org.zarucki.rest.GameSession.UniqueId
@@ -8,8 +9,12 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive0, Directive1, Route}
 import com.softwaremill.session.SessionDirectives._
 import com.softwaremill.session.SessionOptions._
+import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.generic.auto._
 
 import scala.concurrent.ExecutionContext
+
+case class GameInvitation(invitationLink: String)
 
 trait GameRouting extends SessionSupport[GameSession] {
   protected val logger: Logger
@@ -26,10 +31,12 @@ trait GameRouting extends SessionSupport[GameSession] {
           logger.info(s"POST /game")
           val session: GameSession = sessionCreator.newSession()
           logger.info(s"New session $session")
-          // TODO: return json link
+
           // TODO: save somewhere that given session takes players in given game
-          setGameSession(session) {
-            complete("new game")
+          extractUri { uri =>
+            setGameSession(session) {
+              complete(GameInvitation(uri.withPath(Path(s"/game/${session.gameId}/join")).toString()))
+            }
           }
         }
       } ~
