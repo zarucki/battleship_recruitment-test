@@ -25,35 +25,45 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   val player1UUIDPickedAtRandom = UUID.randomUUID()
   val player2UUIDPickedAtRandom = UUID.randomUUID()
   val gameUUIDPickedAtRandom = UUID.randomUUID()
-  val testGameStateStore = new InMemoryGameStateStore[TwoPlayersGameState]()
+  var idsToGive: List[UniqueId] = _
+
+  val testGameStateStore = new InMemoryGameStateStore[TwoPlayersGameState] {
+    override def saveNewGame(newGame: TwoPlayersGameState): UniqueId = {
+      concurrentStorage.put(gameUUIDPickedAtRandom, newGame)
+      gameUUIDPickedAtRandom
+    }
+  }
+
+  override protected def beforeEach(): Unit =
+    idsToGive = List(player1UUIDPickedAtRandom, player2UUIDPickedAtRandom, UUID.randomUUID())
 
   override protected def afterEach(): Unit =
     testGameStateStore.clear()
 
   implicit val testSessionManager =
-    new SessionManager[GameSession](
+    new SessionManager[UserSession](
       SessionConfig
         .defaultConfig(testSecret64characterLong)
         .copy(sessionHeaderConfig = HeaderConfig(headerName, headerName))
     )
 
   val routes = Route.seal(new GameRouting with StrictLogging {
-    override implicit val sessionManager: SessionManager[GameSession] = testSessionManager
+    override implicit val sessionManager: SessionManager[UserSession] = testSessionManager
     override implicit val executor: ExecutionContext = testExecutor
     override implicit val sessionCreator: SessionCreator = new SessionCreator {
-      override def newSession(): GameSession =
-        GameSession(playerId = player1UUIDPickedAtRandom, gameId = gameUUIDPickedAtRandom)
-      override def newSessionForGame(gameId: UniqueId): GameSession =
-        GameSession(playerId = player2UUIDPickedAtRandom, gameId = gameId)
+      override def newSession(): UserSession = {
+        val newUserId = idsToGive.head
+        idsToGive = idsToGive.tail
+        UserSession(userId = newUserId)
+      }
     }
-    override val gameStateStore: GameStateStore[TwoPlayersGameState] = testGameStateStore
+    override val gameStateStore: GameStateStore[UniqueId, TwoPlayersGameState] = testGameStateStore
   }.routes)
 
   it should "set correct header when sent POST to /game" in {
     Post("/game") ~> Host(serverHostName, serverPort) ~> routes ~> check {
-      header(headerName).flatMap(extractSession).value shouldEqual GameSession(
-        playerId = player1UUIDPickedAtRandom,
-        gameId = gameUUIDPickedAtRandom
+      header(headerName).flatMap(extractSession).value shouldEqual UserSession(
+        userId = player1UUIDPickedAtRandom
       )
 
       status shouldEqual StatusCodes.OK
@@ -74,13 +84,12 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     }
   }
 
-  it should "return another valid session for given game when joining not full game" in {
+  it should "return valid session for another player, given game when joining not full game" in {
     createGameAndGetValidSession { _ =>
       Post(s"/game/$gameUUIDPickedAtRandom/join") ~> routes ~> check {
         status shouldEqual StatusCodes.OK
-        header(headerName).flatMap(extractSession).value shouldEqual GameSession(
-          playerId = player2UUIDPickedAtRandom,
-          gameId = gameUUIDPickedAtRandom
+        header(headerName).flatMap(extractSession).value shouldEqual UserSession(
+          userId = player2UUIDPickedAtRandom,
         )
         responseAs[String] shouldEqual "game state"
       }
@@ -121,7 +130,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     }
   }
 
-  private def extractSession(httpHeader: HttpHeader): Option[GameSession] =
+  private def extractSession(httpHeader: HttpHeader): Option[UserSession] =
     oneOff.clientSessionManager.decode(httpHeader.value()).toOption
 
   private def createGameAndGetValidSession(body: RequestTransformer => Unit) =

@@ -1,7 +1,7 @@
 package org.zarucki.rest
 import java.util.UUID
 
-import com.softwaremill.session.{MultiValueSessionSerializer, SessionDirectives, SessionManager, SessionSerializer}
+import com.softwaremill.session.{MultiValueSessionSerializer, SessionManager, SessionSerializer}
 import org.zarucki.UniqueId
 
 import scala.util.Try
@@ -11,17 +11,17 @@ trait SessionSupport[A] {
 
 }
 
-case class GameSession(playerId: UniqueId, gameId: UniqueId)
+case class UserSession(userId: UniqueId)
 
-object GameSession {
-  implicit val serializer: SessionSerializer[GameSession, String] =
-    new MultiValueSessionSerializer[GameSession](
-      (t: GameSession) => Map("userid" -> t.playerId.toString, "gameid" -> t.gameId.toString),
-      m => Try { GameSession(playerId = UUID.fromString(m("userid")), gameId = UUID.fromString(m("gameid"))) }
+object UserSession {
+  val userIdKey = "userid"
+  implicit val serializer: SessionSerializer[UserSession, String] =
+    new MultiValueSessionSerializer[UserSession](
+      (t: UserSession) => Map(userIdKey -> t.userId.toString),
+      m => Try { UserSession(userId = UUID.fromString(m(userIdKey))) }
     )
 }
 
 trait SessionCreator {
-  def newSession(): GameSession = GameSession(playerId = UUID.randomUUID(), gameId = UUID.randomUUID())
-  def newSessionForGame(gameId: UniqueId) = GameSession(playerId = UUID.randomUUID(), gameId = gameId)
+  def newSession(): UserSession = UserSession(userId = UUID.randomUUID())
 }

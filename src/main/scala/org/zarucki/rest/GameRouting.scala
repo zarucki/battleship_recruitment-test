@@ -21,26 +21,26 @@ case class TwoPlayersGameState(hostPlayerId: UniqueId, otherPlayerId: Option[Uni
   def isTherePlaceForAnotherPlayer: Boolean = otherPlayerId.isEmpty
 }
 
-trait GameRouting extends SessionSupport[GameSession] {
+trait GameRouting extends SessionSupport[UserSession] {
   protected val logger: Logger
 
   implicit def executor: ExecutionContext
   implicit def sessionCreator: SessionCreator
-  def gameStateStore: GameStateStore[TwoPlayersGameState]
+  def gameStateStore: GameStateStore[UniqueId, TwoPlayersGameState]
 
   // TODO: rejection should be wrapped and returned as json
   val routes: Route = {
     pathPrefix("game") {
       pathEndOrSingleSlash {
         post {
-          val session: GameSession = sessionCreator.newSession()
+          val session: UserSession = sessionCreator.newSession()
 
           // TODO: check if we overwritten something? what to do then?
-          gameStateStore.saveNewGame(session.gameId, new TwoPlayersGameState(hostPlayerId = session.playerId))
+          val newGameId = gameStateStore.saveNewGame(new TwoPlayersGameState(hostPlayerId = session.userId))
 
           extractUri { uri =>
             setGameSession(session) {
-              complete(GameInvitation(uri.withPath(Path(s"/game/${session.gameId}/join")).toString()))
+              complete(GameInvitation(uri.withPath(Path(s"/game/$newGameId/join")).toString()))
             }
           }
         }
@@ -48,26 +48,35 @@ trait GameRouting extends SessionSupport[GameSession] {
         pathPrefix(JavaUUID) { gameUUID =>
           path("join") {
             post {
-              // TODO: if someone comes with session, treat as noop or game state?
-              // TODO: if player who already joined will try to join again, treat it as simple getState
-              // join existing game, send credentials, and initial state
               logger.info(s"POST /game/$gameUUID/join")
 
               gameStateStore.getGameById(gameUUID) match {
-                case Some(gameState) if gameState.isTherePlaceForAnotherPlayer =>
-                  // TODO: it is weird that session generates gameid and userids
-                  val otherPlayerSession = sessionCreator.newSessionForGame(gameUUID)
+                case None => complete(StatusCodes.NotFound)
+                case Some(gameState) =>
+                  optionalSession(oneOff, usingHeaders) {
+                    case Some(existingSession) if gameState.playerIdSet(existingSession.userId) =>
+                      complete(StatusCodes.OK -> "Already in game.")
+                    case optSession =>
+                      if (!gameState.isTherePlaceForAnotherPlayer) {
+                        complete(StatusCodes.Forbidden -> "Game already full.")
+                      } else {
+                        val otherPlayerSession = optSession.getOrElse(sessionCreator.newSession())
 
-                  gameStateStore.updateGameState(
-                    gameUUID,
-                    state => state.copy(otherPlayerId = Some(otherPlayerSession.playerId))
-                  )
+                        gameStateStore.updateGameState(
+                          gameUUID,
+                          _.copy(otherPlayerId = Some(otherPlayerSession.userId))
+                        )
 
-                  setGameSession(otherPlayerSession) {
-                    complete("game state")
+                        val result = complete("game state")
+                        if (optSession.isDefined) {
+                          result
+                        } else {
+                          setGameSession(otherPlayerSession) {
+                            result
+                          }
+                        }
+                      }
                   }
-                case Some(_) => complete(StatusCodes.Forbidden -> "Game already full.")
-                case _       => complete(StatusCodes.NotFound)
               }
             }
           } ~
@@ -92,15 +101,11 @@ trait GameRouting extends SessionSupport[GameSession] {
     }
   }
 
-  protected def setGameSession(session: GameSession): Directive0 =
+  protected def setGameSession(session: UserSession): Directive0 =
     SessionDirectives.setSession(oneOff, usingHeaders, session)
 
-  protected def requiredSessionForGame(gameId: UniqueId): Directive1[GameSession] =
+  protected def requiredSessionForGame(gameId: UniqueId): Directive1[UserSession] =
     requiredSession(oneOff, usingHeaders).flatMap { session =>
-      if (session.gameId == gameId) {
-        provide(session)
-      } else {
-        reject(oneOff.clientSessionManager.sessionMissingRejection)
-      }
+      provide(session)
     }
 }

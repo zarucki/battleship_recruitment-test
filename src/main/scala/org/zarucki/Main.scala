@@ -8,7 +8,7 @@ import akka.stream.ActorMaterializer
 import com.softwaremill.session.{RefreshTokenStorage, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import org.zarucki.game.GameStateStore
-import org.zarucki.rest.{GameRouting, GameSession, SessionCreator, TwoPlayersGameState}
+import org.zarucki.rest.{GameRouting, SessionCreator, TwoPlayersGameState, UserSession}
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.io.StdIn
@@ -26,9 +26,9 @@ object Main extends App with StrictLogging {
 
   val gamingRoutes = new GameRouting with StrictLogging {
     override implicit def executor: ExecutionContext = executionContext
-    override implicit def sessionManager: SessionManager[GameSession] = ???
+    override implicit def sessionManager: SessionManager[UserSession] = ???
     override implicit def sessionCreator: SessionCreator = ???
-    override def gameStateStore: GameStateStore[TwoPlayersGameState] = ???
+    override def gameStateStore: GameStateStore[UniqueId, TwoPlayersGameState] = ???
   }
 
   val bindingFuture = Http().bindAndHandle(
