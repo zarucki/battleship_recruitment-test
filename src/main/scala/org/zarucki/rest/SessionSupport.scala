@@ -2,7 +2,7 @@ package org.zarucki.rest
 import java.util.UUID
 
 import com.softwaremill.session.{MultiValueSessionSerializer, SessionDirectives, SessionManager, SessionSerializer}
-import org.zarucki.rest.GameSession.UniqueId
+import org.zarucki.UniqueId
 
 import scala.util.Try
 
@@ -14,7 +14,6 @@ trait SessionSupport[A] {
 case class GameSession(playerId: UniqueId, gameId: UniqueId)
 
 object GameSession {
-  type UniqueId = java.util.UUID
   implicit val serializer: SessionSerializer[GameSession, String] =
     new MultiValueSessionSerializer[GameSession](
       (t: GameSession) => Map("userid" -> t.playerId.toString, "gameid" -> t.gameId.toString),
