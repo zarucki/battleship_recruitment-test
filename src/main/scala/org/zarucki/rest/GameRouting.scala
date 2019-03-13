@@ -2,12 +2,12 @@ package org.zarucki.rest
 
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.Uri.Path
-import com.softwaremill.session.SessionDirectives
-import com.typesafe.scalalogging.Logger
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive0, Directive1, Route}
+import akka.http.scaladsl.server.{AuthorizationFailedRejection, Directive0, Directive1, Route}
+import com.softwaremill.session.SessionDirectives
 import com.softwaremill.session.SessionDirectives._
 import com.softwaremill.session.SessionOptions._
+import com.typesafe.scalalogging.Logger
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
 import org.zarucki.UniqueId
@@ -58,11 +58,11 @@ trait GameRouting extends SessionSupport[UserSession] {
                   optionalSession(oneOff, usingHeaders) {
                     case Some(existingSession) if gameState.playerIdSet(existingSession.userId) =>
                       complete(StatusCodes.OK -> "Already in game.")
-                    case optSession =>
+                    case existingSession =>
                       if (!gameState.isTherePlaceForAnotherPlayer) {
                         complete(StatusCodes.Forbidden -> "Game already full.")
                       } else {
-                        val otherPlayerSession = optSession.getOrElse(sessionCreator.newSession())
+                        val otherPlayerSession = existingSession.getOrElse(sessionCreator.newSession())
 
                         gameStateStore.updateGameState(
                           gameUUID,
@@ -70,7 +70,7 @@ trait GameRouting extends SessionSupport[UserSession] {
                         )
 
                         val result = complete(s"game state $gameUUID")
-                        if (optSession.isDefined) {
+                        if (existingSession.isDefined) {
                           result
                         } else {
                           setGameSession(otherPlayerSession) {
@@ -86,14 +86,14 @@ trait GameRouting extends SessionSupport[UserSession] {
               put {
                 logger.info(s"PUT /game/$gameUUID")
 
-                requiredSessionForGame(gameUUID) { session =>
+                requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { session =>
                   complete(StatusCodes.OK)
                 }
               } ~
                 get {
                   logger.info(s"GET /game/$gameUUID")
 
-                  requiredSessionForGame(gameUUID) { session =>
+                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { session =>
                     logger.info("got session: " + session)
                     complete("game state")
                   }
@@ -106,8 +106,12 @@ trait GameRouting extends SessionSupport[UserSession] {
   protected def setGameSession(session: UserSession): Directive0 =
     SessionDirectives.setSession(oneOff, usingHeaders, session)
 
-  protected def requiredSessionForGame(gameId: UniqueId): Directive1[UserSession] =
+  protected def requireSessionAndCheckIfPlayerIsPartOfGame(gameId: UniqueId): Directive1[UserSession] =
     requiredSession(oneOff, usingHeaders).flatMap { session =>
-      provide(session)
+      gameStateStore.getGameById(gameId) match {
+        case Some(gameState) if gameState.playerIdSet(session.userId) => provide(session)
+        case Some(_)                                                  => reject(AuthorizationFailedRejection)
+        case None                                                     => reject()
+      }
     }
 }

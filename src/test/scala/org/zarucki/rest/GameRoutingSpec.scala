@@ -141,10 +141,20 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     }
   }
 
-  it should "return forbidden if session game id does not match url game id" in {
+  it should "return not found when trying to access non existing game" in {
     createGameAndGetValidSession { addSessionTransform =>
       Get(s"/game/${UUID.randomUUID()}") ~> addSessionTransform ~> routes ~> check {
-        status shouldEqual StatusCodes.Forbidden
+        status shouldEqual StatusCodes.NotFound
+      }
+    }
+  }
+
+  it should "return forbidden when trying to access game you are not part of" in {
+    createGameAndGetValidSession { firstGameSessionTransform =>
+      createGameAndGetValidSession { _ =>
+        Get(s"/game/$game2UUIDPickedAtRandom") ~> firstGameSessionTransform ~> routes ~> check {
+          status shouldEqual StatusCodes.Forbidden
+        }
       }
     }
   }
