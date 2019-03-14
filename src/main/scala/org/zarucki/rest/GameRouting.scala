@@ -15,12 +15,6 @@ import org.zarucki.game.GameStateStore
 
 import scala.concurrent.ExecutionContext
 
-case class GameInvitation(invitationLink: String)
-case class TwoPlayersGameState(hostPlayerId: UniqueId, otherPlayerId: Option[UniqueId] = None) {
-  lazy val playerIdSet = Set(hostPlayerId) ++ otherPlayerId.toSet
-  def isTherePlaceForAnotherPlayer: Boolean = otherPlayerId.isEmpty
-}
-
 trait GameRouting extends SessionSupport[UserSession] {
   protected val logger: Logger
 
@@ -36,8 +30,8 @@ trait GameRouting extends SessionSupport[UserSession] {
           val session: UserSession = sessionCreator.newSession()
 
           // TODO: what if someone comes with already valid session
-          // TODO: check if we overwritten something? what to do then?
           // TODO: should one person be able to start multiple games at once?
+          // TODO: check if we overwritten something? what to do then?
           val newGameId = gameStateStore.saveNewGame(new TwoPlayersGameState(hostPlayerId = session.userId))
 
           extractUri { uri =>
@@ -57,10 +51,10 @@ trait GameRouting extends SessionSupport[UserSession] {
                 case Some(gameState) =>
                   optionalSession(oneOff, usingHeaders) {
                     case Some(existingSession) if gameState.playerIdSet(existingSession.userId) =>
-                      complete(StatusCodes.OK -> "Already in game.")
+                      complete(StatusCodes.OK -> GameErrors.alreadyJoinedGame)
                     case existingSession =>
                       if (!gameState.isTherePlaceForAnotherPlayer) {
-                        complete(StatusCodes.Forbidden -> "Game already full.")
+                        complete(StatusCodes.Forbidden -> GameErrors.gameFull)
                       } else {
                         val otherPlayerSession = existingSession.getOrElse(sessionCreator.newSession())
 
@@ -114,4 +108,18 @@ trait GameRouting extends SessionSupport[UserSession] {
         case None                                                     => reject()
       }
     }
+}
+
+case class GameInvitation(invitationLink: String)
+
+object GameErrors {
+  val gameFull = GameError("Game already full.")
+  val alreadyJoinedGame = GameError("Already joined game.")
+}
+
+case class GameError(message: String)
+
+case class TwoPlayersGameState(hostPlayerId: UniqueId, otherPlayerId: Option[UniqueId] = None) {
+  lazy val playerIdSet = Set(hostPlayerId) ++ otherPlayerId.toSet
+  def isTherePlaceForAnotherPlayer: Boolean = otherPlayerId.isEmpty
 }

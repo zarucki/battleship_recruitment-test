@@ -92,7 +92,22 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     createGameAndGetValidSession { addSessionTransform =>
       Post(s"/game/$game1UUIDPickedAtRandom/join") ~> addSessionTransform ~> routes ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[String] shouldEqual "Already in game."
+        responseAs[GameError] shouldEqual GameErrors.alreadyJoinedGame
+      }
+    }
+  }
+
+  it should "return already in game for a player that joined game and tries to join again" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        status shouldEqual StatusCodes.OK
+        responseAs[String] shouldEqual s"game state $game1UUIDPickedAtRandom"
+        header(headerName).isDefined shouldEqual true
+
+        Post(s"/game/$game1UUIDPickedAtRandom/join") ~> addHeader(header(headerName).get) ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+          responseAs[GameError] shouldEqual GameErrors.alreadyJoinedGame
+        }
       }
     }
   }
@@ -126,7 +141,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
       Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
         Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
           status shouldEqual StatusCodes.Forbidden
-          responseAs[String] shouldEqual "Game already full."
+          responseAs[GameError] shouldEqual GameErrors.gameFull
         }
       }
     }
