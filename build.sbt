@@ -33,7 +33,7 @@ libraryDependencies ++= loggingStack
 
 libraryDependencies ++= Seq(
   "org.scalactic" %% "scalactic" % scalaTestVersion,
-  "org.scalatest" %% "scalatest" % scalaTestVersion % "test"
+  "org.scalatest" %% "scalatest" % scalaTestVersion % Test
 )
 
 
@@ -50,5 +50,6 @@ libraryDependencies ++= Seq(
 libraryDependencies ++= Seq(
   "io.circe" %% "circe-core",
   "io.circe" %% "circe-generic",
+  "io.circe" %% "circe-generic-extras",
   "io.circe" %% "circe-parser"
 ).map(_ % circeVersion)

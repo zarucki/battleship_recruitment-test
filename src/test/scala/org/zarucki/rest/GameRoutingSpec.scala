@@ -5,16 +5,18 @@ import java.util.UUID
 import akka.http.scaladsl.model.headers.Host
 import akka.http.scaladsl.model.{HttpHeader, StatusCodes}
 import akka.http.scaladsl.server.Route
+import akka.stream.scaladsl.Sink
 import com.softwaremill.session.{HeaderConfig, SessionConfig, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import com.softwaremill.session.SessionOptions._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
 import org.scalatest.BeforeAndAfterEach
-import org.zarucki.UniqueId
+import org.zarucki.{AwaitingPlayers, UniqueId}
 import org.zarucki.game.{GameStateStore, InMemoryGameStateStore}
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext}
 
 class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   val headerName = "Set-Auth-Token"
@@ -150,8 +152,17 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   it should "return game state with correct session" in {
     createGameAndGetValidSession { addSessionTransform =>
       Get(s"/game/$game1UUIDPickedAtRandom") ~> addSessionTransform ~> routes ~> check {
+
         status shouldEqual StatusCodes.OK
-        responseAs[String] shouldEqual "game state"
+
+        responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = AwaitingPlayers)
+
+        val completionStage = responseEntity
+          .getDataBytes()
+          .map(_.utf8String)
+          .runWith(Sink.reduce[String](_ + _), materializer)
+
+        Await.result(completionStage, Duration.Inf) shouldEqual "{\"gameStatus\":\"AWAITING_PLAYERS\"}"
       }
     }
   }

@@ -1,16 +1,19 @@
 package org.zarucki.rest
 
-import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.marshalling.Marshaller
+import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{AuthorizationFailedRejection, Directive0, Directive1, Route}
+import akka.http.scaladsl.server._
 import com.softwaremill.session.SessionDirectives
 import com.softwaremill.session.SessionDirectives._
 import com.softwaremill.session.SessionOptions._
 import com.typesafe.scalalogging.Logger
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.Decoder.Result
+import io.circe.{Decoder, Encoder, HCursor, Json}
 import io.circe.generic.auto._
-import org.zarucki.UniqueId
+import org.zarucki.{AwaitingPlayers, GameStatus, UniqueId}
 import org.zarucki.game.GameStateStore
 
 import scala.concurrent.ExecutionContext
@@ -80,16 +83,21 @@ trait GameRouting extends SessionSupport[UserSession] {
               put {
                 logger.info(s"PUT /game/$gameUUID")
 
-                requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { session =>
+                requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameState) =>
                   complete(StatusCodes.OK)
                 }
               } ~
                 get {
                   logger.info(s"GET /game/$gameUUID")
 
-                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { session =>
+                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameState) =>
                     logger.info("got session: " + session)
-                    complete("game state")
+                    logger.info("got game state: " + gameState)
+                    if (gameState.isTherePlaceForAnotherPlayer) {
+                      complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
+                    } else {
+                      complete("game state")
+                    }
                   }
                 }
             }
@@ -100,10 +108,12 @@ trait GameRouting extends SessionSupport[UserSession] {
   protected def setGameSession(session: UserSession): Directive0 =
     SessionDirectives.setSession(oneOff, usingHeaders, session)
 
-  protected def requireSessionAndCheckIfPlayerIsPartOfGame(gameId: UniqueId): Directive1[UserSession] =
+  protected def requireSessionAndCheckIfPlayerIsPartOfGame(
+      gameId: UniqueId
+  ): Directive[(UserSession, TwoPlayersGameState)] =
     requiredSession(oneOff, usingHeaders).flatMap { session =>
       gameStateStore.getGameById(gameId) match {
-        case Some(gameState) if gameState.playerIdSet(session.userId) => provide(session)
+        case Some(gameState) if gameState.playerIdSet(session.userId) => tprovide((session, gameState))
         case Some(_)                                                  => reject(AuthorizationFailedRejection)
         case None                                                     => reject()
       }
@@ -118,6 +128,7 @@ object GameErrors {
 }
 
 case class GameError(message: String)
+case class TurnedBasedGameStatus(gameStatus: GameStatus)
 
 case class TwoPlayersGameState(hostPlayerId: UniqueId, otherPlayerId: Option[UniqueId] = None) {
   lazy val playerIdSet = Set(hostPlayerId) ++ otherPlayerId.toSet
