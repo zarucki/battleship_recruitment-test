@@ -1,7 +1,6 @@
 package org.zarucki.rest
 
-import akka.http.scaladsl.marshalling.Marshaller
-import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server._
@@ -10,11 +9,9 @@ import com.softwaremill.session.SessionDirectives._
 import com.softwaremill.session.SessionOptions._
 import com.typesafe.scalalogging.Logger
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import io.circe.Decoder.Result
-import io.circe.{Decoder, Encoder, HCursor, Json}
 import io.circe.generic.auto._
-import org.zarucki.{AwaitingPlayers, GameStatus, UniqueId}
 import org.zarucki.game.GameStateStore
+import org.zarucki.{AwaitingPlayers, GameStatus, UniqueId}
 
 import scala.concurrent.ExecutionContext
 
