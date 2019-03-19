@@ -13,7 +13,7 @@ import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
 import org.scalatest.BeforeAndAfterEach
 import org.zarucki.{AwaitingPlayers, UniqueId}
-import org.zarucki.game.{GameStateStore, InMemoryGameStateStore}
+import org.zarucki.game.{GameServerLookup, InMemoryGameServerLookup}
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext}
@@ -29,8 +29,8 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   var gameIdsToGive: List[UniqueId] = _
   var userIdsToGive: List[UniqueId] = _
 
-  val testGameStateStore = new InMemoryGameStateStore[TwoPlayersGameState] {
-    override def saveNewGame(newGame: TwoPlayersGameState): UniqueId = {
+  val testGameServerLookup = new InMemoryGameServerLookup[TwoPlayersGameServer] {
+    override def startNewGameServer(newGame: TwoPlayersGameServer): UniqueId = {
       val newGameId = gameIdsToGive.head
       gameIdsToGive = gameIdsToGive.tail
       concurrentStorage.put(newGameId, newGame)
@@ -44,7 +44,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   }
 
   override protected def afterEach(): Unit =
-    testGameStateStore.clear()
+    testGameServerLookup.clear()
 
   implicit val testSessionManager =
     new SessionManager[UserSession](
@@ -63,7 +63,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         UserSession(userId = newUserId)
       }
     }
-    override val gameStateStore: GameStateStore[UniqueId, TwoPlayersGameState] = testGameStateStore
+    override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer] = testGameServerLookup
   }.routes)
 
   it should "set correct header when sent POST to /game" in {
@@ -77,7 +77,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         s"http://$serverHostName:$serverPort/game/$game1UUIDPickedAtRandom/join"
       )
 
-      testGameStateStore.getGameById(game1UUIDPickedAtRandom).value shouldEqual TwoPlayersGameState(
+      testGameServerLookup.getGameServerById(game1UUIDPickedAtRandom).value shouldEqual TwoPlayersGameServer(
         hostPlayerId = player1UUIDPickedAtRandom,
         otherPlayerId = None
       )

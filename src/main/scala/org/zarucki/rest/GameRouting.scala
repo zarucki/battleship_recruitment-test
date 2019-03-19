@@ -10,7 +10,7 @@ import com.softwaremill.session.SessionOptions._
 import com.typesafe.scalalogging.Logger
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
-import org.zarucki.game.GameStateStore
+import org.zarucki.game.GameServerLookup
 import org.zarucki.{AwaitingPlayers, GameStatus, UniqueId}
 
 import scala.concurrent.ExecutionContext
@@ -20,7 +20,7 @@ trait GameRouting extends SessionSupport[UserSession] {
 
   implicit def executor: ExecutionContext
   implicit def sessionCreator: SessionCreator
-  def gameStateStore: GameStateStore[UniqueId, TwoPlayersGameState]
+  def gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer]
 
   // TODO: rejection should be wrapped and returned as json
   val routes: Route = {
@@ -32,7 +32,7 @@ trait GameRouting extends SessionSupport[UserSession] {
           // TODO: what if someone comes with already valid session
           // TODO: should one person be able to start multiple games at once?
           // TODO: check if we overwritten something? what to do then?
-          val newGameId = gameStateStore.saveNewGame(new TwoPlayersGameState(hostPlayerId = session.userId))
+          val newGameId = gameServerLookup.startNewGameServer(new TwoPlayersGameServer(hostPlayerId = session.userId))
 
           extractUri { uri =>
             setGameSession(session) {
@@ -46,19 +46,19 @@ trait GameRouting extends SessionSupport[UserSession] {
             post {
               logger.info(s"POST /game/$gameUUID/join")
 
-              gameStateStore.getGameById(gameUUID) match {
+              gameServerLookup.getGameServerById(gameUUID) match {
                 case None => complete(StatusCodes.NotFound)
-                case Some(gameState) =>
+                case Some(gameServer) =>
                   optionalSession(oneOff, usingHeaders) {
-                    case Some(existingSession) if gameState.playerIdSet(existingSession.userId) =>
+                    case Some(existingSession) if gameServer.playerIdSet(existingSession.userId) =>
                       complete(StatusCodes.OK -> GameErrors.alreadyJoinedGame)
                     case existingSession =>
-                      if (!gameState.isTherePlaceForAnotherPlayer) {
+                      if (!gameServer.isTherePlaceForAnotherPlayer) {
                         complete(StatusCodes.Forbidden -> GameErrors.gameFull)
                       } else {
                         val otherPlayerSession = existingSession.getOrElse(sessionCreator.newSession())
 
-                        gameStateStore.updateGameState(
+                        gameServerLookup.updateGameServer(
                           gameUUID,
                           _.copy(otherPlayerId = Some(otherPlayerSession.userId))
                         )
@@ -80,17 +80,17 @@ trait GameRouting extends SessionSupport[UserSession] {
               put {
                 logger.info(s"PUT /game/$gameUUID")
 
-                requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameState) =>
+                requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer) =>
                   complete(StatusCodes.OK)
                 }
               } ~
                 get {
                   logger.info(s"GET /game/$gameUUID")
 
-                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameState) =>
+                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer) =>
                     logger.info("got session: " + session)
-                    logger.info("got game state: " + gameState)
-                    if (gameState.isTherePlaceForAnotherPlayer) {
+                    logger.info("got game state: " + gameServer)
+                    if (gameServer.isTherePlaceForAnotherPlayer) {
                       complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
                     } else {
                       complete("game state")
@@ -107,12 +107,12 @@ trait GameRouting extends SessionSupport[UserSession] {
 
   protected def requireSessionAndCheckIfPlayerIsPartOfGame(
       gameId: UniqueId
-  ): Directive[(UserSession, TwoPlayersGameState)] =
+  ): Directive[(UserSession, TwoPlayersGameServer)] =
     requiredSession(oneOff, usingHeaders).flatMap { session =>
-      gameStateStore.getGameById(gameId) match {
-        case Some(gameState) if gameState.playerIdSet(session.userId) => tprovide((session, gameState))
-        case Some(_)                                                  => reject(AuthorizationFailedRejection)
-        case None                                                     => reject()
+      gameServerLookup.getGameServerById(gameId) match {
+        case Some(gameServer) if gameServer.playerIdSet(session.userId) => tprovide((session, gameServer))
+        case Some(_)                                                    => reject(AuthorizationFailedRejection)
+        case None                                                       => reject()
       }
     }
 }
@@ -127,7 +127,8 @@ object GameErrors {
 case class GameError(message: String)
 case class TurnedBasedGameStatus(gameStatus: GameStatus)
 
-case class TwoPlayersGameState(hostPlayerId: UniqueId, otherPlayerId: Option[UniqueId] = None) {
+// TODO: generalize this to N players
+case class TwoPlayersGameServer(hostPlayerId: UniqueId, otherPlayerId: Option[UniqueId] = None) {
   lazy val playerIdSet = Set(hostPlayerId) ++ otherPlayerId.toSet
   def isTherePlaceForAnotherPlayer: Boolean = otherPlayerId.isEmpty
 }
