@@ -2,13 +2,10 @@ package org.zarucki.game.battleship
 
 case class ShipLocation(bowDirection: Direction, address: BoardAddress)
 
-// TODO: should this be immutable
 class Board(sizeX: Int, sizeY: Int) {
   assert(sizeX > 0)
   assert(sizeY > 0)
 
-  // TODO: should this be mutable
-  // TODO: should this even be a map?
   private var placedShips: Map[ShipLocation, Ship] = Map()
 
   def ships: List[Ship] = {

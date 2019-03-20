@@ -42,14 +42,14 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
           val session = sessionCreator.newSession()
 
           extractUri { uri =>
-            waitOnIOAndLogErrors(
+            ioToFutureAndLogErrors(
               // TODO: check if we overwritten something? what to do then?
               (gameServerLookup.startNewGameServer(newGameServerForPlayer(session.userId)) map { newGameId =>
                 setGameSession(session) {
                   complete(GameInvitation(uri.withPath(Path(s"/game/$newGameId/join")).toString()))
                 }
               })
-            )(s"Error while creating new game: $uri")
+            )(s"Error while creating new game: $uri")(identity)
           }
         }
       } ~
@@ -57,7 +57,7 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
           path("join") {
             post {
               optionalSession(oneOff, usingHeaders) { sessionOpt =>
-                waitOnIOAndLogErrors(
+                ioToFutureAndLogErrors(
                   gameServerLookup
                     .getGameServerById(gameUUID)
                     .flatMap {
@@ -99,7 +99,7 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
                           }
                         }
                     }
-                )(s"Error while joining to game $gameUUID.")
+                )(s"Error while joining to game $gameUUID.")(identity)
               }
             }
           } ~
@@ -143,7 +143,7 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
       gameId: UniqueId
   )(action: ((UserSession, TGameServer, Int)) => Route): Route = {
     requiredSession(oneOff, usingHeaders) { session =>
-      onComplete(
+      ioToFutureAndLogErrors(
         gameServerLookup
           .getGameServerById(gameId)
           .map { gameServerOpt =>
@@ -154,20 +154,19 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
               }
               .map(action)
           }
-          .unsafeToFuture()
-      ) {
-        case Success(Some(value)) => value
-        case Success(None)        => reject(AuthorizationFailedRejection)
-        case Failure(exception) =>
-          logger.error(s"Error while operating on game $gameId.", exception)
-          complete(StatusCodes.ServerError)
-      }
+      )(s"Error while checking access to $gameId. User: ${session.userId}.")(
+        o =>
+          o match {
+            case Some(value) => value
+            case None        => reject(AuthorizationFailedRejection)
+        }
+      )
     }
   }
 
-  protected def waitOnIOAndLogErrors(io: IO[Route])(msg: String = "Async error."): Route = {
+  protected def ioToFutureAndLogErrors[T](io: IO[T])(msg: String = "Async error.")(toRoute: T => Route): Route = {
     onComplete(io.unsafeToFuture()) {
-      case Success(value) => value
+      case Success(value) => toRoute(value)
       case Failure(exception) =>
         logger.error(msg, exception)
         complete(StatusCodes.ServerError)
