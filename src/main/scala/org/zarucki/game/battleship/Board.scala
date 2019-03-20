@@ -11,6 +11,14 @@ class Board(sizeX: Int, sizeY: Int) {
   // TODO: should this even be a map?
   private var placedShips: Map[ShipLocation, Ship] = Map()
 
+  def ships: List[Ship] = {
+    placedShips.values.toList
+  }
+
+  def allShipsSunk(): Boolean = {
+    ships.forall(_.isSunk())
+  }
+
   def addressIsOutside(address: BoardAddress): Boolean = {
     address.x < 0 || address.x >= sizeX || address.y < 0 || address.y >= sizeY
   }

@@ -95,8 +95,6 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
             }
           } ~
             pathEndOrSingleSlash {
-              // TODO: when game finished returned that game is done
-              // TODO: what to return with last shot?
               put {
                 entity(as[TCommand]) { command =>
                   requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>

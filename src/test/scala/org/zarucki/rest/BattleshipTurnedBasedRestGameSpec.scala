@@ -10,6 +10,7 @@ class BattleshipTurnedBasedRestGameSpec extends BaseSpec with BeforeAndAfterEach
   override protected def beforeEach(): Unit = {
     underlyingGame = new BattleshipGame(sizeX = 10, sizeY = 10)
     underlyingGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
+    underlyingGame.placeShip(1, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
     underlyingGame.startGame()
     sut = new BattleshipTurnedBasedRestGame(underlyingGame)
   }
@@ -47,5 +48,14 @@ class BattleshipTurnedBasedRestGameSpec extends BaseSpec with BeforeAndAfterEach
 
   it should "should correctly return error if position in hit command is outside of the board" in {
     sut.issueCommand(1, HitCommand("A100")) shouldEqual Left(RestGameErrors.positionOutsideOfGamePlayArea)
+  }
+
+  it should "correctly return game end status after one player lost all of his ships" in {
+    sut.issueCommand(1, HitCommand("A1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
+    sut.issueCommand(1, HitCommand("B1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
+    sut.issueCommand(1, HitCommand("C1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
+    sut.issueCommand(1, HitCommand("D1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = true))
+    sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YouWon)
+    sut.getStatus(0) shouldEqual TurnedBasedGameStatus(YouLost)
   }
 }

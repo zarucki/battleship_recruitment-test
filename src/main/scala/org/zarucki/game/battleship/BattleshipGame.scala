@@ -6,6 +6,7 @@ object BattleshipGameErrors {
   val shipCollidesWithOtherAlreadyPlacedShip = BattleshipGameError("Ship collides with other already placed ship.")
   val turnBelongsToOtherPlayer = BattleshipGameError("Turn belongs to other player.")
   val cannotShootBeforeStartingTheGame = BattleshipGameError("Cannot shoot before staring the game.")
+  val cannotShootAfterGameHasFinished = BattleshipGameError("Cannot shoot after game has finished.")
   val cannotPlaceShipsAfterGameStarted = BattleshipGameError("Cannot place ships after game started.")
 }
 
@@ -13,9 +14,7 @@ case class BattleshipGameError(msg: String)
 
 // TODO: number of shots?
 // TODO: scoring rules
-// TODO: responsibilities: turn logic, score, set of ships to place
 // TODO: logs of player actions: placements, shots?
-// TODO: don't accept moves if not turn of player
 class BattleshipGame(sizeX: Int, sizeY: Int) {
   // by default the second player starts
   private var currentTurnBelongsTo: Int = 1
@@ -29,6 +28,35 @@ class BattleshipGame(sizeX: Int, sizeY: Int) {
     } else {
       val currentPlayerBoard = getPlayerBoard(currentPlayerNumber)
       currentPlayerBoard.placeShip(shipLocation, ship)
+    }
+  }
+
+  def getWinner(): Option[Int] = {
+    val otherPlayer = getOtherPlayerNumber(currentTurnBelongsTo)
+
+    if (getPlayerBoard(currentTurnBelongsTo).allShipsSunk()) {
+      Some(otherPlayer)
+    } else if (getPlayerBoard(otherPlayer).allShipsSunk()) {
+      Some(currentTurnBelongsTo)
+    } else {
+      None
+    }
+  }
+
+  def shoot(byPlayerNumber: Int, address: BoardAddress): Either[BattleshipGameError, Option[Ship]] = {
+    if (!gameStarted) {
+      Left(BattleshipGameErrors.cannotShootBeforeStartingTheGame)
+    } else if (getWinner().isDefined) {
+      Left(BattleshipGameErrors.cannotShootAfterGameHasFinished)
+    } else if (currentTurnBelongsTo != byPlayerNumber) {
+      Left(BattleshipGameErrors.turnBelongsToOtherPlayer)
+    } else {
+      Right(
+        (getPlayerBoard(getOtherPlayerNumber(byPlayerNumber)).shootAtAddress(address)).orElse {
+          currentTurnBelongsTo = getOtherPlayerNumber(byPlayerNumber)
+          None
+        }
+      )
     }
   }
 
@@ -51,20 +79,5 @@ class BattleshipGame(sizeX: Int, sizeY: Int) {
     assert(playerNumber < playerBoards.size)
 
     playerBoards(playerNumber)
-  }
-
-  def shoot(byPlayerNumber: Int, address: BoardAddress): Either[BattleshipGameError, Option[Ship]] = {
-    if (!gameStarted) {
-      Left(BattleshipGameErrors.cannotShootBeforeStartingTheGame)
-    } else if (currentTurnBelongsTo != byPlayerNumber) {
-      Left(BattleshipGameErrors.turnBelongsToOtherPlayer)
-    } else {
-      Right(
-        (getPlayerBoard(getOtherPlayerNumber(byPlayerNumber)).shootAtAddress(address)).orElse {
-          currentTurnBelongsTo = getOtherPlayerNumber(byPlayerNumber)
-          None
-        }
-      )
-    }
   }
 }

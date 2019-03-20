@@ -48,7 +48,8 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     userIdsToGive = List(player1UUIDPickedAtRandom, player2UUIDPickedAtRandom, UUID.randomUUID())
     testBattleshipGame = new BattleshipGame(10, 10)
     testBattleshipRestGame = new BattleshipTurnedBasedRestGame(testBattleshipGame)
-    testBattleshipGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
+    testBattleshipGame.placeShip(0, ShipLocation(North, BoardAddress(x = 0, y = 0)), OneLinerShip.fourDecker)
+    testBattleshipGame.placeShip(1, ShipLocation(North, BoardAddress(x = 1, y = 0)), OneLinerShip.fourDecker)
     testBattleshipGame.startGame()
   }
 
