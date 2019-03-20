@@ -21,7 +21,7 @@ import org.zarucki.game.{GameServerLookup, InMemoryGameServerLookup}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext}
 
-class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
+class BattleshipGameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   val headerName = "Set-Auth-Token"
   val serverHostName = "battleship-game.com"
   val serverPort = 8080
@@ -69,7 +69,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
       BattleshipTurnedBasedRestGame,
       HitCommand,
       HitReport
-    ] with StrictLogging {
+    ] with HitCommandEncoding with StrictLogging {
       override implicit val sessionManager: SessionManager[UserSession] = testSessionManager
       override implicit val executor: ExecutionContext = testExecutor
       override implicit val sessionCreator: SessionCreator = new SessionCreator {
@@ -79,6 +79,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
           UserSession(userId = newUserId)
         }
       }
+
       override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] =
         testGameServerLookup
 
@@ -87,12 +88,6 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
       ): TwoPlayersGameServer[BattleshipTurnedBasedRestGame] = {
         new TwoPlayersGameServer(hostPlayerId = userId, game = testBattleshipRestGame)
       }
-
-      override implicit def commandEncoder: Decoder[HitCommand] = {
-        Decoder[HitCommand](io.circe.generic.auto.exportDecoder[HitCommand].instance)
-      }
-
-      override implicit def commandResultDecoder: Encoder[HitReport] = HitReport.encodeHitReport
     }.routes
   )
 

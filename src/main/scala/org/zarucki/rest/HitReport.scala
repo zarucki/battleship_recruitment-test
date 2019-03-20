@@ -32,3 +32,11 @@ case class Hit(shipType: String, sunken: Boolean) extends HitReport
 case object Miss extends HitReport
 
 case class HitCommand(position: String)
+
+trait HitCommandEncoding {
+  implicit val commandEncoder: Decoder[HitCommand] = {
+    Decoder[HitCommand](io.circe.generic.auto.exportDecoder[HitCommand].instance)
+  }
+
+  implicit val commandResultDecoder: Encoder[HitReport] = HitReport.encodeHitReport
+}

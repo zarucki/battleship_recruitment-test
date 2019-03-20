@@ -28,7 +28,8 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
   implicit def executor: ExecutionContext
   implicit def sessionCreator: SessionCreator
 
-  def gameServerLookup: GameServerLookup[UniqueId, TGameServer]
+  val gameServerLookup: GameServerLookup[UniqueId, TGameServer]
+
   def newGameServerForPlayer(userId: UniqueId): TGameServer
 
   // TODO: rejection should be wrapped and returned as json

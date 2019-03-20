@@ -5,17 +5,12 @@ import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive, ExceptionHandler, RejectionHandler}
 import akka.stream.ActorMaterializer
-import com.softwaremill.session.SessionManager
 import com.typesafe.scalalogging.StrictLogging
-import io.circe.{Decoder, Encoder}
-import org.zarucki.game.GameServerLookup
 import org.zarucki.rest._
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
+import scala.concurrent.ExecutionContextExecutor
 import scala.io.StdIn
 import scala.util.control.NonFatal
-
-case class AppConfig(httpRestApiPort: Int)
 
 object Main extends App with StrictLogging {
 
@@ -23,29 +18,19 @@ object Main extends App with StrictLogging {
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
 
-  val appConfig: AppConfig = AppConfig(httpRestApiPort = 8080)
+  val appConfig: AppConfig = AppConfig(
+    httpRestApiPort = 8080,
+    sessionSecret64CharacterLong = "x" * 64,
+    sessionHeaderName = "Set-Auth-Token",
+    boardXSize = 10,
+    boardYSize = 10
+  )
 
-  val gamingRoutes =
-    new GameRouting[TwoPlayersGameServer[BattleshipTurnedBasedRestGame], BattleshipTurnedBasedRestGame, HitCommand, HitReport]
-    with StrictLogging {
-      override implicit def executor: ExecutionContext = executionContext
-      override implicit def sessionManager: SessionManager[UserSession] = ???
-      override implicit def sessionCreator: SessionCreator = ???
-      override def gameServerLookup: GameServerLookup[
-        UniqueId,
-        TwoPlayersGameServer[BattleshipTurnedBasedRestGame]
-      ] = ???
-      override def newGameServerForPlayer(
-          userId: UniqueId
-      ): TwoPlayersGameServer[BattleshipTurnedBasedRestGame] = ???
-      override implicit def commandEncoder: Decoder[HitCommand] = ???
-      override implicit def commandResultDecoder: Encoder[HitReport] =
-        ???
-    }
+  val battleshipGameRouting = new BattleshipGameRouting(appConfig)
 
   val bindingFuture = Http().bindAndHandle(
     handler = routeWrappers {
-      gamingRoutes.routes
+      battleshipGameRouting.routes
     },
     interface = "localhost",
     port = appConfig.httpRestApiPort

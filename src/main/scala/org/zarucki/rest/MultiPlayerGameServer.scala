@@ -9,7 +9,6 @@ trait MultiPlayerGameServer[GameServer <: MultiPlayerGameServer[GameServer, Game
   def getGame(): Game
 }
 
-// TODO: generalize this to N players?
 case class TwoPlayersGameServer[Game](hostPlayerId: UniqueId, game: Game, otherPlayerId: Option[UniqueId] = None)
     extends MultiPlayerGameServer[TwoPlayersGameServer[Game], Game] {
 
