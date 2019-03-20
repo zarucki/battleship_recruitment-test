@@ -8,7 +8,6 @@ import scala.util.Try
 
 trait SessionSupport[A] {
   implicit def sessionManager: SessionManager[A]
-
 }
 
 case class UserSession(userId: UniqueId)

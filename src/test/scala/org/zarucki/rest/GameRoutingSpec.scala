@@ -201,7 +201,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
 
         responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = AwaitingPlayers)
 
-        responseEntityAsString(responseEntity) shouldEqual "{\"gameStatus\":\"AWAITING_PLAYERS\"}"
+        responseEntityAsString(responseEntity) shouldEqual """{"gameStatus":"AWAITING_PLAYERS","yourScore":0,"opponentScore":0}"""
       }
     }
   }
@@ -304,7 +304,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     }
   }
 
-  it should "return Miss if hits the " in {
+  it should "return sunken hit report if whole ship was destroyed" in {
     createGameAndGetValidSession { _ =>
       Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
         val player2SessionHeader = header(headerName).get
@@ -391,7 +391,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
           Get(s"/game/$game1UUIDPickedAtRandom") ~> addHeader(player2SessionHeader) ~> routes ~> check {
             status shouldEqual StatusCodes.OK
-            responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = YourTurn)
+            responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = YourTurn, yourScore = 1)
           }
         }
       }
@@ -412,6 +412,79 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
           }
         }
       }
+    }
+  }
+
+  it should "work properly for example game" in {
+    createGameAndGetValidSession { firstPlayerHeaderTransform =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        val secondPlayerHeaderTransform = addHeader(header(headerName).get)
+
+        shootField(game1UUIDPickedAtRandom, "A1")(secondPlayerHeaderTransform) {
+          responseAs[HitReport] shouldEqual Hit("FOUR_DECKER", sunken = false)
+          shootField(game1UUIDPickedAtRandom, "A2")(secondPlayerHeaderTransform) {
+            responseAs[HitReport] shouldEqual Miss
+            shootField(game1UUIDPickedAtRandom, "B1")(secondPlayerHeaderTransform) {
+              status shouldEqual StatusCodes.BadRequest
+              responseAs[GameError] shouldEqual GameError("Turn belongs to other player.")
+
+              getGameStatus(game1UUIDPickedAtRandom)(firstPlayerHeaderTransform) {
+                entityAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(
+                  YourTurn,
+                  yourScore = 0,
+                  opponentScore = 1
+                )
+
+                shootField(game1UUIDPickedAtRandom, "A2")(firstPlayerHeaderTransform) {
+                  shootField(game1UUIDPickedAtRandom, "B2")(firstPlayerHeaderTransform) {
+                    shootField(game1UUIDPickedAtRandom, "C2")(firstPlayerHeaderTransform) {
+                      shootField(game1UUIDPickedAtRandom, "D2")(firstPlayerHeaderTransform) {
+                        responseAs[HitReport] shouldEqual Hit("FOUR_DECKER", sunken = true)
+
+                        shootField(game1UUIDPickedAtRandom, "C7")(firstPlayerHeaderTransform) {
+                          status shouldEqual StatusCodes.BadRequest
+                          responseAs[GameError] shouldEqual GameError("Cannot shoot after game has finished.")
+
+                          getGameStatus(game1UUIDPickedAtRandom)(firstPlayerHeaderTransform) {
+                            entityAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(
+                              YouWon,
+                              yourScore = 4,
+                              opponentScore = 1
+                            )
+
+                            getGameStatus(game1UUIDPickedAtRandom)(secondPlayerHeaderTransform) {
+                              entityAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(
+                                YouLost,
+                                yourScore = 1,
+                                opponentScore = 4
+                              )
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private def getGameStatus[T](gameId: UUID)(requestTransformer: RequestTransformer)(body: => T): T = {
+    Get(s"/game/$gameId") ~> requestTransformer ~> routes ~> check {
+      body
+    }
+  }
+
+  private def shootField[T](gameId: UUID, position: String)(requestTransformer: RequestTransformer)(body: => T): T = {
+    Put(
+      s"/game/$gameId",
+      HttpEntity(ContentTypes.`application/json`, HitCommand(position).asJson.toString())
+    ) ~> requestTransformer ~> routes ~> check {
+      body
     }
   }
 
