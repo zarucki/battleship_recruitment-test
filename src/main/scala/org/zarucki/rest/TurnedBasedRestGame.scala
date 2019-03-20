@@ -1,8 +1,8 @@
-package org.zarucki
+package org.zarucki.rest
 
 case class TurnedBasedGameStatus(gameStatus: GameStatus)
 
-trait RestGame[Command, CommandResult] {
+trait TurnedBasedRestGame[Command, CommandResult] {
   def getStatus(playerNumber: Int): TurnedBasedGameStatus
   def issueCommand(byPlayerNumber: Int, command: Command): CommandResult
 }

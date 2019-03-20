@@ -16,7 +16,10 @@ import org.zarucki._
 
 import scala.concurrent.ExecutionContext
 
-trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGame <: RestGame[TCommand, TCommandResult], TCommand, TCommandResult]
+trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGame <: TurnedBasedRestGame[
+  TCommand,
+  TCommandResult
+], TCommand, TCommandResult]
     extends SessionSupport[UserSession] {
   protected val logger: Logger
 
@@ -50,8 +53,6 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
         pathPrefix(JavaUUID) { gameUUID =>
           path("join") {
             post {
-              logger.info(s"POST /game/$gameUUID/join")
-
               gameServerLookup.getGameServerById(gameUUID) match {
                 case None => complete(StatusCodes.NotFound)
                 case Some(gameServer) =>
@@ -95,21 +96,17 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
           } ~
             pathEndOrSingleSlash {
               // TODO: when game finished returned that game is done
+              // TODO: what to return with last shot?
               put {
                 entity(as[TCommand]) { command =>
-                  logger.info(s"PUT /game/$gameUUID")
-
                   requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>
+                    // not your turn / invalid move / game already completed
                     complete(gameServer.getGame().issueCommand(playerNumber, command))
                   }
                 }
               } ~
                 get {
-                  logger.info(s"GET /game/$gameUUID")
-
                   requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>
-                    logger.info("got session: " + session)
-                    logger.info("got game state: " + gameServer)
                     if (gameServer.howManyPlayersCanStillJoin > 0) {
                       complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
                     } else {
@@ -139,40 +136,3 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
 }
 
 case class GameInvitation(invitationLink: String)
-
-object GameErrors {
-  val gameFull = GameError("Game already full.")
-  val alreadyJoinedGame = GameError("Already joined game.")
-}
-
-case class GameError(message: String)
-
-// TODO: generalize this to N players?
-case class TwoPlayersGameServer[Game](hostPlayerId: UniqueId, game: Game, otherPlayerId: Option[UniqueId] = None)
-    extends MultiPlayerGameServer[TwoPlayersGameServer[Game], Game] {
-
-  lazy val playerIdSet = Set(hostPlayerId) ++ otherPlayerId.toSet
-
-  override def joinPlayer(playerId: UniqueId): TwoPlayersGameServer[Game] = {
-    copy(otherPlayerId = Some(playerId))
-  }
-  override def getGame(): Game = game
-
-  override def getPlayerNumber(playerId: UniqueId): Int = {
-    if (playerId == hostPlayerId) {
-      0
-    } else {
-      1
-    }
-  }
-
-  override def howManyPlayersCanStillJoin: Int = otherPlayerId.map(_ => 0).getOrElse(1)
-}
-
-trait MultiPlayerGameServer[GameServer <: MultiPlayerGameServer[GameServer, Game], Game] {
-  def playerIdSet: Set[UniqueId]
-  def howManyPlayersCanStillJoin: Int
-  def joinPlayer(playerId: UniqueId): GameServer
-  def getPlayerNumber(playerId: UniqueId): Int
-  def getGame(): Game
-}

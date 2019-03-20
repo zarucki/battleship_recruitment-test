@@ -1,8 +1,7 @@
 package org.zarucki.game.battleship
-import org.zarucki.{TurnedBasedGameStatus, YourTurn}
-import org.zarucki.rest.BaseRouteSpec
+import org.zarucki.BaseSpec
 
-class BattleshipGameSpec extends BaseRouteSpec {
+class BattleshipGameSpec extends BaseSpec {
   it should "not allow placing ship in the same spot twice" in {
     val game = new BattleshipGame(sizeX = 10, sizeY = 10)
     game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip(4)).isRight shouldEqual true
@@ -73,30 +72,5 @@ class BattleshipGameSpec extends BaseRouteSpec {
     game.shoot(1, BoardAddress(0, 1)) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = false)
     game.shoot(1, BoardAddress(0, 2)) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = false)
     game.shoot(1, BoardAddress(0, 3)) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = true)
-  }
-
-  it should "sink the ship after shooting all segments using string position" in {
-    val game = new BattleshipGame(sizeX = 10, sizeY = 10)
-    game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
-    game.issueCommand(1, HitCommand("A1")) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = false)
-    game.issueCommand(1, HitCommand("B1")) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = false)
-    game.issueCommand(1, HitCommand("C1")) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = false)
-    game.issueCommand(1, HitCommand("D1")) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = true)
-  }
-
-  it should "still be the player turn if he hits the ship" in {
-    val game = new BattleshipGame(sizeX = 10, sizeY = 10)
-    game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
-    game.whosTurnIsIt shouldEqual 1
-    game.issueCommand(1, HitCommand("A1")) shouldEqual Hit(OneLinerShip.fourDecker.name, sunken = false)
-    game.whosTurnIsIt shouldEqual 1
-  }
-
-  it should "switch turn to other player if the current player misses" in {
-    val game = new BattleshipGame(sizeX = 10, sizeY = 10)
-    game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
-    game.whosTurnIsIt shouldEqual 1
-    game.issueCommand(1, HitCommand("A2")) shouldEqual Miss
-    game.whosTurnIsIt shouldEqual 0
   }
 }

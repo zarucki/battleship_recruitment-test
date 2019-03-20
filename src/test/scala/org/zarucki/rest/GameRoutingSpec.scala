@@ -32,9 +32,10 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   var gameIdsToGive: List[UniqueId] = _
   var userIdsToGive: List[UniqueId] = _
   var testBattleshipGame: BattleshipGame = _
+  var testBattleshipRestGame: BattleshipTurnedBasedRestGame = _
 
-  val testGameServerLookup = new InMemoryGameServerLookup[TwoPlayersGameServer[BattleshipGame]] {
-    override def startNewGameServer(newGame: TwoPlayersGameServer[BattleshipGame]): UniqueId = {
+  val testGameServerLookup = new InMemoryGameServerLookup[TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] {
+    override def startNewGameServer(newGame: TwoPlayersGameServer[BattleshipTurnedBasedRestGame]): UniqueId = {
       val newGameId = gameIdsToGive.head
       gameIdsToGive = gameIdsToGive.tail
       concurrentStorage.put(newGameId, newGame)
@@ -46,6 +47,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     gameIdsToGive = List(game1UUIDPickedAtRandom, game2UUIDPickedAtRandom, UUID.randomUUID())
     userIdsToGive = List(player1UUIDPickedAtRandom, player2UUIDPickedAtRandom, UUID.randomUUID())
     testBattleshipGame = new BattleshipGame(10, 10)
+    testBattleshipRestGame = new BattleshipTurnedBasedRestGame(testBattleshipGame)
     testBattleshipGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
   }
 
@@ -60,7 +62,12 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     )
 
   val routes = Route.seal(
-    new GameRouting[TwoPlayersGameServer[BattleshipGame], BattleshipGame, HitCommand, HitReport] with StrictLogging {
+    new GameRouting[
+      TwoPlayersGameServer[BattleshipTurnedBasedRestGame],
+      BattleshipTurnedBasedRestGame,
+      HitCommand,
+      HitReport
+    ] with StrictLogging {
       override implicit val sessionManager: SessionManager[UserSession] = testSessionManager
       override implicit val executor: ExecutionContext = testExecutor
       override implicit val sessionCreator: SessionCreator = new SessionCreator {
@@ -70,16 +77,19 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
           UserSession(userId = newUserId)
         }
       }
-      override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipGame]] =
+      override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] =
         testGameServerLookup
+
       override def newGameServerForPlayer(
           userId: UniqueId
-      ): TwoPlayersGameServer[BattleshipGame] = {
-        new TwoPlayersGameServer(hostPlayerId = userId, game = testBattleshipGame)
+      ): TwoPlayersGameServer[BattleshipTurnedBasedRestGame] = {
+        new TwoPlayersGameServer(hostPlayerId = userId, game = testBattleshipRestGame)
       }
+
       override implicit def commandEncoder: Decoder[HitCommand] = {
         Decoder[HitCommand](io.circe.generic.auto.exportDecoder[HitCommand].instance)
       }
+
       override implicit def commandResultDecoder: Encoder[HitReport] = HitReport.encodeHitReport
     }.routes
   )
@@ -97,9 +107,9 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
 
       testGameServerLookup
         .getGameServerById(game1UUIDPickedAtRandom)
-        .value shouldEqual TwoPlayersGameServer[BattleshipGame](
+        .value shouldEqual TwoPlayersGameServer[BattleshipTurnedBasedRestGame](
         hostPlayerId = player1UUIDPickedAtRandom,
-        game = testBattleshipGame,
+        game = testBattleshipRestGame,
         otherPlayerId = None
       )
     }

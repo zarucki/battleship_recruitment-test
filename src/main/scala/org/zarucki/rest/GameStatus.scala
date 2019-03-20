@@ -1,4 +1,5 @@
-package org.zarucki
+package org.zarucki.rest
+
 import io.circe.Decoder.Result
 import io.circe._
 import io.circe.generic.extras.encoding.EnumerationEncoder
@@ -30,7 +31,7 @@ object GameStatus {
         Try {
           import scala.reflect.runtime.universe
           val runtimeMirror = universe.runtimeMirror(getClass.getClassLoader)
-          val module = runtimeMirror.staticModule("org.zarucki." + underscores2camel(className))
+          val module = runtimeMirror.staticModule("org.zarucki.rest." + underscores2camel(className))
           val obj = runtimeMirror.reflectModule(module)
           obj.instance.asInstanceOf[GameStatus]
         }.toEither.left.map {
@@ -40,7 +41,7 @@ object GameStatus {
 
   }
 
-  def camel2Underscores(s: String): String = {
+  private def camel2Underscores(s: String): String = {
     @tailrec def camel2Underscore(s: String, output: String, lastUppercase: Boolean): String =
       if (s.isEmpty) output
       else {

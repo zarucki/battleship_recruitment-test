@@ -1,6 +1,8 @@
-package org.zarucki
-import io.circe.syntax._
+package org.zarucki.rest
+
 import io.circe.parser._
+import io.circe.syntax._
+import org.zarucki.BaseSpec
 
 class GameStatusTest extends BaseSpec {
   it should "serialize and deserialize AwaitingPlayers" in {

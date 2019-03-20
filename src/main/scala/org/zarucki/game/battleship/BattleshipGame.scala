@@ -32,7 +32,7 @@ case object Miss extends HitReport
 // TODO: responsibilities: turn logic, score, set of ships to place
 // TODO: logs of player actions: placements, shots?
 // TODO: don't accept moves if not turn of player
-class BattleshipGame(sizeX: Int, sizeY: Int) extends RestGame[HitCommand, HitReport] {
+class BattleshipGame(sizeX: Int, sizeY: Int) {
   // by default the second player starts
   private var currentTurnBelongsTo: Int = 1
 
@@ -59,15 +59,6 @@ class BattleshipGame(sizeX: Int, sizeY: Int) extends RestGame[HitCommand, HitRep
     playerBoards(playerNumber)
   }
 
-  override def getStatus(playerNumber: Int): TurnedBasedGameStatus = {
-    // TODO: check if someone won?
-    if (currentTurnBelongsTo == playerNumber) {
-      TurnedBasedGameStatus(YourTurn)
-    } else {
-      TurnedBasedGameStatus(WaitingForOpponentMove)
-    }
-  }
-
   def shoot(byPlayerNumber: Int, address: BoardAddress): HitReport = {
     (getPlayerBoard(getOtherPlayerNumber(byPlayerNumber)).shootAtAddress(address) map { hitShip =>
       Hit(hitShip.name, hitShip.isSunk())
@@ -75,17 +66,5 @@ class BattleshipGame(sizeX: Int, sizeY: Int) extends RestGame[HitCommand, HitRep
       currentTurnBelongsTo = getOtherPlayerNumber(byPlayerNumber)
       Miss
     }
-  }
-
-  override def issueCommand(byPlayerNumber: Int, command: HitCommand): HitReport = {
-    val address = positionToXY(command.position)
-    shoot(byPlayerNumber, address)
-  }
-
-  // TODO: some unit tests here?
-  private def positionToXY(position: String): BoardAddress = {
-    assert(position.length == 2)
-    // TODO: catch exception if toInt fails?
-    BoardAddress(x = position.tail.toInt - 1, y = position.head.toUpper.toInt - 'A'.toInt)
   }
 }
