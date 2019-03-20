@@ -1,4 +1,5 @@
 package org.zarucki
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
@@ -14,9 +15,10 @@ object Main extends App with StrictLogging {
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
 
+  // TODO: read this from typeconfig
   val appConfig: AppConfig = AppConfig(
     httpRestApiPort = 8080,
-    sessionSecret64CharacterLong = "x" * 64,
+    sessionSecret64CharacterLong = "W8MqCPCAToiDPGBCeHscgWbJ1XsRh03U6qkDc5kjl1KTeKvAxnN3OXlukbIfzbxy",
     sessionHeaderName = "Set-Auth-Token",
     boardXSize = 10,
     boardYSize = 10
