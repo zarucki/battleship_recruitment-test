@@ -12,7 +12,8 @@ import com.softwaremill.session.SessionOptions._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
 import org.scalatest.BeforeAndAfterEach
-import org.zarucki.{AwaitingPlayers, UniqueId}
+import org.zarucki.game.battleship.BattleshipGame
+import org.zarucki._
 import org.zarucki.game.{GameServerLookup, InMemoryGameServerLookup}
 
 import scala.concurrent.duration.Duration
@@ -28,9 +29,10 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   val (game1UUIDPickedAtRandom, game2UUIDPickedAtRandom) = (UUID.randomUUID(), UUID.randomUUID())
   var gameIdsToGive: List[UniqueId] = _
   var userIdsToGive: List[UniqueId] = _
+  var testBattleshipGame: BattleshipGame = _
 
-  val testGameServerLookup = new InMemoryGameServerLookup[TwoPlayersGameServer] {
-    override def startNewGameServer(newGame: TwoPlayersGameServer): UniqueId = {
+  val testGameServerLookup = new InMemoryGameServerLookup[TwoPlayersGameServer[BattleshipGame]] {
+    override def startNewGameServer(newGame: TwoPlayersGameServer[BattleshipGame]): UniqueId = {
       val newGameId = gameIdsToGive.head
       gameIdsToGive = gameIdsToGive.tail
       concurrentStorage.put(newGameId, newGame)
@@ -41,6 +43,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   override protected def beforeEach(): Unit = {
     gameIdsToGive = List(game1UUIDPickedAtRandom, game2UUIDPickedAtRandom, UUID.randomUUID())
     userIdsToGive = List(player1UUIDPickedAtRandom, player2UUIDPickedAtRandom, UUID.randomUUID())
+    testBattleshipGame = new BattleshipGame(10, 10)
   }
 
   override protected def afterEach(): Unit =
@@ -53,7 +56,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         .copy(sessionHeaderConfig = HeaderConfig(headerName, headerName))
     )
 
-  val routes = Route.seal(new GameRouting with StrictLogging {
+  val routes = Route.seal(new GameRouting[TwoPlayersGameServer[BattleshipGame], BattleshipGame] with StrictLogging {
     override implicit val sessionManager: SessionManager[UserSession] = testSessionManager
     override implicit val executor: ExecutionContext = testExecutor
     override implicit val sessionCreator: SessionCreator = new SessionCreator {
@@ -63,7 +66,13 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         UserSession(userId = newUserId)
       }
     }
-    override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer] = testGameServerLookup
+    override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipGame]] =
+      testGameServerLookup
+    override def newGameServerForPlayer(
+        userId: UniqueId
+    ): TwoPlayersGameServer[BattleshipGame] = {
+      new TwoPlayersGameServer(hostPlayerId = userId, game = testBattleshipGame)
+    }
   }.routes)
 
   it should "set correct header when sent POST to /game" in {
@@ -77,8 +86,11 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         s"http://$serverHostName:$serverPort/game/$game1UUIDPickedAtRandom/join"
       )
 
-      testGameServerLookup.getGameServerById(game1UUIDPickedAtRandom).value shouldEqual TwoPlayersGameServer(
+      testGameServerLookup
+        .getGameServerById(game1UUIDPickedAtRandom)
+        .value shouldEqual TwoPlayersGameServer[BattleshipGame](
         hostPlayerId = player1UUIDPickedAtRandom,
+        game = testBattleshipGame,
         otherPlayerId = None
       )
     }
@@ -163,6 +175,28 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
           .runWith(Sink.reduce[String](_ + _), materializer)
 
         Await.result(completionStage, Duration.Inf) shouldEqual "{\"gameStatus\":\"AWAITING_PLAYERS\"}"
+      }
+    }
+  }
+
+  it should "return YourTurn if both players are in the game for the invited player " in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Get(s"/game/$game1UUIDPickedAtRandom") ~> addHeader(header(headerName).get) ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+          responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = YourTurn)
+        }
+      }
+    }
+  }
+
+  it should "return WaitingForOpponentMove if both players are in the game for the invited player " in {
+    createGameAndGetValidSession { addSessionTransform =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Get(s"/game/$game1UUIDPickedAtRandom") ~> addSessionTransform ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+          responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = WaitingForOpponentMove)
+        }
       }
     }
   }

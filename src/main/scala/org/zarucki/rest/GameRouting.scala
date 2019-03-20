@@ -11,28 +11,31 @@ import com.typesafe.scalalogging.Logger
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
 import io.circe.generic.auto._
 import org.zarucki.game.GameServerLookup
-import org.zarucki.{AwaitingPlayers, GameStatus, UniqueId}
+import org.zarucki._
 
 import scala.concurrent.ExecutionContext
 
-trait GameRouting extends SessionSupport[UserSession] {
+trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, Game], Game <: RestGame]
+    extends SessionSupport[UserSession] {
   protected val logger: Logger
 
   implicit def executor: ExecutionContext
   implicit def sessionCreator: SessionCreator
-  def gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer]
+
+  def gameServerLookup: GameServerLookup[UniqueId, TGameServer]
+  def newGameServerForPlayer(userId: UniqueId): TGameServer
 
   // TODO: rejection should be wrapped and returned as json
   val routes: Route = {
     pathPrefix("game") {
       pathEndOrSingleSlash {
         post {
-          val session: UserSession = sessionCreator.newSession()
+          val session = sessionCreator.newSession()
 
           // TODO: what if someone comes with already valid session
           // TODO: should one person be able to start multiple games at once?
           // TODO: check if we overwritten something? what to do then?
-          val newGameId = gameServerLookup.startNewGameServer(new TwoPlayersGameServer(hostPlayerId = session.userId))
+          val newGameId = gameServerLookup.startNewGameServer(newGameServerForPlayer(session.userId))
 
           extractUri { uri =>
             setGameSession(session) {
@@ -58,9 +61,10 @@ trait GameRouting extends SessionSupport[UserSession] {
                       } else {
                         val otherPlayerSession = existingSession.getOrElse(sessionCreator.newSession())
 
+                        // TODO: If game server is for N players it does not mean yet that the game can start
                         gameServerLookup.updateGameServer(
                           gameUUID,
-                          _.copy(otherPlayerId = Some(otherPlayerSession.userId))
+                          _.joinPlayer(otherPlayerSession.userId)
                         )
 
                         val result = complete(s"game state $gameUUID")
@@ -77,6 +81,7 @@ trait GameRouting extends SessionSupport[UserSession] {
             }
           } ~
             pathEndOrSingleSlash {
+              // TODO: when game finished returned that game is done
               put {
                 logger.info(s"PUT /game/$gameUUID")
 
@@ -93,7 +98,7 @@ trait GameRouting extends SessionSupport[UserSession] {
                     if (gameServer.isTherePlaceForAnotherPlayer) {
                       complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
                     } else {
-                      complete("game state")
+                      complete(gameServer.getGame().getStatus(gameServer.getPlayerNumber(session.userId)))
                     }
                   }
                 }
@@ -107,7 +112,7 @@ trait GameRouting extends SessionSupport[UserSession] {
 
   protected def requireSessionAndCheckIfPlayerIsPartOfGame(
       gameId: UniqueId
-  ): Directive[(UserSession, TwoPlayersGameServer)] =
+  ): Directive[(UserSession, TGameServer)] =
     requiredSession(oneOff, usingHeaders).flatMap { session =>
       gameServerLookup.getGameServerById(gameId) match {
         case Some(gameServer) if gameServer.playerIdSet(session.userId) => tprovide((session, gameServer))
@@ -125,10 +130,33 @@ object GameErrors {
 }
 
 case class GameError(message: String)
-case class TurnedBasedGameStatus(gameStatus: GameStatus)
 
-// TODO: generalize this to N players
-case class TwoPlayersGameServer(hostPlayerId: UniqueId, otherPlayerId: Option[UniqueId] = None) {
+// TODO: generalize this to N players?
+case class TwoPlayersGameServer[Game](hostPlayerId: UniqueId, game: Game, otherPlayerId: Option[UniqueId] = None)
+    extends MultiPlayerGameServer[TwoPlayersGameServer[Game], Game] {
+
   lazy val playerIdSet = Set(hostPlayerId) ++ otherPlayerId.toSet
+
   def isTherePlaceForAnotherPlayer: Boolean = otherPlayerId.isEmpty
+
+  override def joinPlayer(playerId: UniqueId): TwoPlayersGameServer[Game] = {
+    copy(otherPlayerId = Some(playerId))
+  }
+  override def getGame(): Game = game
+
+  override def getPlayerNumber(playerId: UniqueId): Int = {
+    if (playerId == hostPlayerId) {
+      0
+    } else {
+      1
+    }
+  }
+}
+
+trait MultiPlayerGameServer[GameServer <: MultiPlayerGameServer[GameServer, Game], Game] {
+  def playerIdSet: Set[UniqueId]
+  def isTherePlaceForAnotherPlayer: Boolean
+  def joinPlayer(playerId: UniqueId): GameServer
+  def getPlayerNumber(playerId: UniqueId): Int
+  def getGame(): Game
 }
