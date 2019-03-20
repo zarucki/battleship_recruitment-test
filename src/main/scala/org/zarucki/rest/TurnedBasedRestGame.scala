@@ -1,7 +1,6 @@
 package org.zarucki.rest
 
-// TODO: return scores
-case class TurnedBasedGameStatus(gameStatus: GameStatus)
+case class TurnedBasedGameStatus(gameStatus: GameStatus, yourScore: Int = 0, opponentScore: Int = 0)
 
 trait TurnedBasedRestGame[Command, CommandResult] {
   def getStatus(playerNumber: Int): TurnedBasedGameStatus

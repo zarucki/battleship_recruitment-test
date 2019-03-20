@@ -6,16 +6,21 @@ import scala.util.Try
 
 class BattleshipTurnedBasedRestGame(battleshipGame: BattleshipGame) extends TurnedBasedRestGame[HitCommand, HitReport] {
   override def getStatus(playerNumber: Int): TurnedBasedGameStatus = {
-    battleshipGame.getWinner() match {
-      case Some(winnerPlayerNumber) if winnerPlayerNumber == playerNumber => TurnedBasedGameStatus(YouWon)
-      case Some(_)                                                        => TurnedBasedGameStatus(YouLost)
+    val status = battleshipGame.getWinner() match {
+      case Some(winnerPlayerNumber) if winnerPlayerNumber == playerNumber => YouWon
+      case Some(_)                                                        => YouLost
       case None =>
         if (battleshipGame.whoseTurnIsIt == playerNumber) {
-          TurnedBasedGameStatus(YourTurn)
+          YourTurn
         } else {
-          TurnedBasedGameStatus(WaitingForOpponentMove)
+          WaitingForOpponentMove
         }
     }
+
+    val playerScores = battleshipGame.getPlayerScores
+    val yourScore = playerScores(playerNumber)
+    val opponentScore = playerScores(battleshipGame.getOtherPlayerNumber(playerNumber))
+    TurnedBasedGameStatus(status, yourScore, opponentScore)
   }
 
   override def issueCommand(byPlayerNumber: Int, command: HitCommand): Either[RestGameError, HitReport] = {

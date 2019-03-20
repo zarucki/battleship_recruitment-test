@@ -12,10 +12,11 @@ object BattleshipGameErrors {
 
 case class BattleshipGameError(msg: String)
 
-// TODO: number of shots?
-// TODO: scoring rules
-// TODO: logs of player actions: placements, shots?
-class BattleshipGame(sizeX: Int, sizeY: Int) {
+class BattleshipGame(
+    sizeX: Int,
+    sizeY: Int,
+    scoringRules: BattleshipScoringRules = new EveryShipAndShipSegmentEqualBattleshipScoring(scorePerSegment = 1)
+) {
   // by default the second player starts
   private var currentTurnBelongsTo: Int = 1
   private var gameStarted: Boolean = false
@@ -41,6 +42,10 @@ class BattleshipGame(sizeX: Int, sizeY: Int) {
     } else {
       None
     }
+  }
+
+  def getPlayerScores: Array[Int] = {
+    playerBoards.map(scoringRules.scoreForBoard).reverse
   }
 
   def shoot(byPlayerNumber: Int, address: BoardAddress): Either[BattleshipGameError, Option[Ship]] = {
@@ -70,9 +75,7 @@ class BattleshipGame(sizeX: Int, sizeY: Int) {
     !playerBoards.head.addressIsOutside(boardAddress)
   }
 
-  def getScore(playerNumber: Int): Int = ???
-
-  private def getOtherPlayerNumber(currentPlayerNumber: Int): Int = (currentPlayerNumber + 1) % 2
+  def getOtherPlayerNumber(currentPlayerNumber: Int): Int = (currentPlayerNumber + 1) % 2
 
   private def getPlayerBoard(playerNumber: Int): Board = {
     assert(playerNumber >= 0)

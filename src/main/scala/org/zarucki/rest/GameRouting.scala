@@ -72,7 +72,7 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
                         )
 
                         val result = if (gameServer.howManyPlayersCanStillJoin > 1) {
-                          complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
+                          complete(awaitingPlayersStatus)
                         } else {
                           gameServerLookup.getGameServerById(gameUUID).map {
                             _.getGame().getStatus(gameServer.getPlayerNumber(playerSession.userId))
@@ -110,7 +110,7 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
                 get {
                   requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>
                     if (gameServer.howManyPlayersCanStillJoin > 0) {
-                      complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
+                      complete(awaitingPlayersStatus)
                     } else {
                       complete(gameServer.getGame().getStatus(playerNumber))
                     }
@@ -119,6 +119,10 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
             }
         }
     }
+  }
+
+  protected def awaitingPlayersStatus = {
+    new TurnedBasedGameStatus(gameStatus = AwaitingPlayers, yourScore = 0, opponentScore = 0)
   }
 
   protected def setGameSession(session: UserSession): Directive0 =

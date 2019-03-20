@@ -43,4 +43,6 @@ case class OneLinerShip(length: Int, name: String = "", segmentsOnFire: Set[Int]
   override def isShipSegmentDestroyed(shipSegmentIndex: Int): Boolean = {
     segmentsOnFire(shipSegmentIndex)
   }
+
+  override def getShipSegmentCount: Int = length
 }

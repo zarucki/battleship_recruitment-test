@@ -25,7 +25,7 @@ class BattleshipTurnedBasedRestGameSpec extends BaseSpec with BeforeAndAfterEach
   it should "still be the player turn if he hits the ship" in {
     sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YourTurn)
     sut.issueCommand(1, HitCommand("A1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
-    sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YourTurn)
+    sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YourTurn, yourScore = 1)
   }
 
   it should "switch turn to other player if the current player misses" in {
@@ -55,7 +55,7 @@ class BattleshipTurnedBasedRestGameSpec extends BaseSpec with BeforeAndAfterEach
     sut.issueCommand(1, HitCommand("B1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
     sut.issueCommand(1, HitCommand("C1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
     sut.issueCommand(1, HitCommand("D1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = true))
-    sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YouWon)
-    sut.getStatus(0) shouldEqual TurnedBasedGameStatus(YouLost)
+    sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YouWon, yourScore = 4)
+    sut.getStatus(0) shouldEqual TurnedBasedGameStatus(YouLost, opponentScore = 4)
   }
 }

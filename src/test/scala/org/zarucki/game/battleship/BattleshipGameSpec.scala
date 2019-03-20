@@ -110,6 +110,21 @@ class BattleshipGameSpec extends BaseSpec with BeforeAndAfterEach {
     sut.getWinner() shouldEqual Some(1)
   }
 
+  it should "should correctly figure out who won 2" in {
+    sut.startGame()
+    sut.getWinner() shouldEqual None
+
+    // to change turn to player 0
+    sut.shoot(1, BoardAddress(x = -1, y = -1)) shouldEqual Right(None)
+
+    sut.shoot(0, BoardAddress(x = 9, y = 0)).isRight shouldEqual true
+    sut.shoot(0, BoardAddress(x = 9, y = 1)).isRight shouldEqual true
+    sut.shoot(0, BoardAddress(x = 9, y = 2)).isRight shouldEqual true
+    sut.shoot(0, BoardAddress(x = 9, y = 3)).isRight shouldEqual true
+
+    sut.getWinner() shouldEqual Some(0)
+  }
+
   it should "should not allow firing after game is finished" in {
     sut.startGame()
     sut.getWinner() shouldEqual None
@@ -126,18 +141,16 @@ class BattleshipGameSpec extends BaseSpec with BeforeAndAfterEach {
     )
   }
 
-  it should "should correctly figure out who won 2" in {
+  it should "should correctly tell score" in {
     sut.startGame()
     sut.getWinner() shouldEqual None
 
-    // to change turn to player 0
-    sut.shoot(1, BoardAddress(x = -1, y = -1)) shouldEqual Right(None)
+    sut.shoot(1, BoardAddress(x = 8, y = 0)).isRight shouldEqual true
+    sut.getPlayerScores shouldEqual Array(0, 1)
+    sut.shoot(1, BoardAddress(x = 6, y = 0)) shouldEqual Right(None)
 
     sut.shoot(0, BoardAddress(x = 9, y = 0)).isRight shouldEqual true
-    sut.shoot(0, BoardAddress(x = 9, y = 1)).isRight shouldEqual true
     sut.shoot(0, BoardAddress(x = 9, y = 2)).isRight shouldEqual true
-    sut.shoot(0, BoardAddress(x = 9, y = 3)).isRight shouldEqual true
-
-    sut.getWinner() shouldEqual Some(0)
+    sut.getPlayerScores shouldEqual Array(2, 1)
   }
 }
