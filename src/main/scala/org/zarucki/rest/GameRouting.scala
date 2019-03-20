@@ -58,10 +58,11 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
                 case Some(gameServer) =>
                   optionalSession(oneOff, usingHeaders) {
                     case Some(existingSession) if gameServer.playerIdSet(existingSession.userId) =>
-                      complete(StatusCodes.OK -> GameErrors.alreadyJoinedGame)
+                      // TODO: maybe return game status?
+                      returnRestGameError(RestGameErrors.alreadyJoinedGame)
                     case existingSession =>
                       if (gameServer.howManyPlayersCanStillJoin == 0) {
-                        complete(StatusCodes.Forbidden -> GameErrors.gameFull)
+                        returnRestGameError(RestGameErrors.gameFull)
                       } else {
                         val playerSession = existingSession.getOrElse(sessionCreator.newSession())
 
@@ -103,8 +104,8 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
                     gameServer.getGame().issueCommand(playerNumber, command) match {
                       case Right(commandResult) => complete(commandResult)
                       case Left(gameError) =>
-                        logger.warn(s"${session.userId} issued invalid command: " + command)
-                        complete(gameError)
+                        logger.warn(s"${session.userId} issued invalid command: " + command + " error: " + gameError)
+                        returnRestGameError(gameError)
                     }
                   }
                 }
@@ -137,6 +138,10 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
         case None    => reject()
       }
     }
+
+  protected def returnRestGameError(restGameError: RestGameError): StandardRoute = {
+    complete(restGameError.clientError -> restGameError.gameError)
+  }
 }
 
 case class GameInvitation(invitationLink: String)

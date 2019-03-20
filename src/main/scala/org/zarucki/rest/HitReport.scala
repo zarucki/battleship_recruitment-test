@@ -1,6 +1,6 @@
 package org.zarucki.rest
 
-import io.circe.{Decoder, Encoder, Json, JsonObject}
+import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
 import cats.syntax.functor._
@@ -11,10 +11,23 @@ object HitReport {
     case Miss          => Json.fromJsonObject(JsonObject.apply("result" -> Json.fromString("MISS")))
   }
 
-  implicit val decodeHitReport: Decoder[HitReport] = Decoder[Hit].widen or Decoder[Miss.type].widen
+  implicit val missDecoder: Decoder[Miss.type] = new Decoder[Miss.type] {
+
+    final def apply(c: HCursor): Decoder.Result[Miss.type] = {
+      c.downField("result").as[String].flatMap { resultValue =>
+        if (resultValue == "MISS") {
+          Right(Miss)
+        } else {
+          Left(DecodingFailure("Not miss object.", List()))
+        }
+      }
+    }
+  }
+
+  implicit val decodeHitReport: Decoder[HitReport] = Decoder[Hit].widen or missDecoder.widen
 }
 
-trait HitReport
+sealed trait HitReport
 case class Hit(shipType: String, sunken: Boolean) extends HitReport
 case object Miss extends HitReport
 

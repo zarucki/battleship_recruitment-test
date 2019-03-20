@@ -61,16 +61,24 @@ class BattleshipGameSpec extends BaseSpec {
   it should "return miss if shooting again place that was hit before" in {
     val game = new BattleshipGame(sizeX = 10, sizeY = 10)
     game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
-    game.shoot(1, BoardAddress(0, 0)).value shouldEqual OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0))
-    game.shoot(1, BoardAddress(0, 0)) shouldEqual None
+    game.shoot(1, BoardAddress(0, 0)) shouldEqual Right(Some(OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0))))
+    game.shoot(1, BoardAddress(0, 0)) shouldEqual Right(None)
   }
 
   it should "sink the ship after shooting all segments" in {
     val game = new BattleshipGame(sizeX = 10, sizeY = 10)
     game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
-    game.shoot(1, BoardAddress(0, 0)).value shouldEqual OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0))
-    game.shoot(1, BoardAddress(0, 3)).value shouldEqual OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0, 3))
-    game.shoot(1, BoardAddress(0, 1)).value shouldEqual OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0, 1, 3))
-    game.shoot(1, BoardAddress(0, 2)).value shouldEqual OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0, 1, 2, 3))
+    game.shoot(1, BoardAddress(0, 0)) shouldEqual Right(Some(OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0))))
+    game.shoot(1, BoardAddress(0, 3)) shouldEqual Right(Some(OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0, 3))))
+    game.shoot(1, BoardAddress(0, 1)) shouldEqual Right(
+      Some(
+        OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0, 1, 3))
+      )
+    )
+    game.shoot(1, BoardAddress(0, 2)) shouldEqual Right(
+      Some(
+        OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0, 1, 2, 3))
+      )
+    )
   }
 }

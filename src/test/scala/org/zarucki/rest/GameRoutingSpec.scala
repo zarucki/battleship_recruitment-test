@@ -124,8 +124,8 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   it should "return already in game for a player that hosted game if he tries to join it" in {
     createGameAndGetValidSession { addSessionTransform =>
       Post(s"/game/$game1UUIDPickedAtRandom/join") ~> addSessionTransform ~> routes ~> check {
-        status shouldEqual StatusCodes.OK
-        responseAs[GameError] shouldEqual GameErrors.alreadyJoinedGame
+        status shouldEqual StatusCodes.BadRequest
+        responseAs[GameError] shouldEqual RestGameErrors.alreadyJoinedGame.gameError
       }
     }
   }
@@ -138,8 +138,8 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         header(headerName).isDefined shouldEqual true
 
         Post(s"/game/$game1UUIDPickedAtRandom/join") ~> addHeader(header(headerName).get) ~> routes ~> check {
-          status shouldEqual StatusCodes.OK
-          responseAs[GameError] shouldEqual GameErrors.alreadyJoinedGame
+          status shouldEqual StatusCodes.BadRequest
+          responseAs[GameError] shouldEqual RestGameErrors.alreadyJoinedGame.gameError
         }
       }
     }
@@ -174,7 +174,18 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
       Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
         Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
           status shouldEqual StatusCodes.Forbidden
-          responseAs[GameError] shouldEqual GameErrors.gameFull
+          responseAs[GameError] shouldEqual RestGameErrors.gameFull.gameError
+        }
+      }
+    }
+  }
+
+  it should "return forbidden if game already full as string" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+          status shouldEqual StatusCodes.Forbidden
+          responseEntityAsString(responseEntity) shouldEqual """{"message":"Game already full."}"""
         }
       }
     }
@@ -322,7 +333,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   }
 
   it should "return Miss if player shoots wrong" in {
-    createGameAndGetValidSession { _ =>
+    createGameAndGetValidSession { firstGameSessionTransform =>
       Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
         Put(
           s"/game/$game1UUIDPickedAtRandom",
@@ -332,6 +343,37 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
           status shouldEqual StatusCodes.OK
 
           responseAs[HitReport] shouldEqual Miss
+        }
+      }
+    }
+  }
+
+  it should "return Miss if player shoots wrong as string" in {
+    createGameAndGetValidSession { firstGameSessionTransform =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A2").asJson.toString())
+        ) ~>
+          addHeader(header(headerName).get) ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+
+          responseEntityAsString(responseEntity) shouldEqual """{"result":"MISS"}"""
+        }
+      }
+    }
+  }
+
+  it should "return error that it is not player turn if first player makes first move" in {
+    createGameAndGetValidSession { firstPlayerSessionTransform =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A1").asJson.toString())
+        ) ~> firstPlayerSessionTransform ~> routes ~> check {
+          status shouldEqual StatusCodes.BadRequest
+
+          responseAs[GameError] shouldEqual GameError("Turn belongs to other player.")
         }
       }
     }

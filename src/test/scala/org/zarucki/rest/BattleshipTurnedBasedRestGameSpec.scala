@@ -39,14 +39,14 @@ class BattleshipTurnedBasedRestGameSpec extends BaseSpec with BeforeAndAfterEach
   }
 
   it should "should correctly return error if position in hit command is incorrect" in {
-    sut.issueCommand(1, HitCommand("A")) shouldEqual Left(GameErrors.invalidPosition)
-    sut.issueCommand(1, HitCommand("1")) shouldEqual Left(GameErrors.invalidPosition)
-    sut.issueCommand(1, HitCommand("AB2")) shouldEqual Left(GameErrors.invalidPosition)
-    sut.issueCommand(1, HitCommand("12")) shouldEqual Left(GameErrors.invalidPosition)
-    sut.issueCommand(1, HitCommand("2A")) shouldEqual Left(GameErrors.invalidPosition)
+    sut.issueCommand(1, HitCommand("A")) shouldEqual Left(RestGameErrors.invalidPosition)
+    sut.issueCommand(1, HitCommand("1")) shouldEqual Left(RestGameErrors.invalidPosition)
+    sut.issueCommand(1, HitCommand("AB2")) shouldEqual Left(RestGameErrors.invalidPosition)
+    sut.issueCommand(1, HitCommand("12")) shouldEqual Left(RestGameErrors.invalidPosition)
+    sut.issueCommand(1, HitCommand("2A")) shouldEqual Left(RestGameErrors.invalidPosition)
   }
 
   it should "should correctly return error if position in hit command is outside of the board" in {
-    sut.issueCommand(1, HitCommand("A100")) shouldEqual Left(GameErrors.positionOutsideOfGamePlayArea)
+    sut.issueCommand(1, HitCommand("A100")) shouldEqual Left(RestGameErrors.positionOutsideOfGamePlayArea)
   }
 }

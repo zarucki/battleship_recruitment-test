@@ -4,6 +4,7 @@ package game.battleship
 object BattleshipGameErrors {
   val shipDoesNotFitInBoard = BattleshipGameError("Ship does not fit in the board.")
   val shipCollidesWithOtherAlreadyPlacedShip = BattleshipGameError("Ship collides with other already placed ship.")
+  val turnBelongsToOtherPlayer = BattleshipGameError("Turn belongs to other player.")
 }
 
 case class BattleshipGameError(msg: String)
@@ -42,10 +43,16 @@ class BattleshipGame(sizeX: Int, sizeY: Int) {
     playerBoards(playerNumber)
   }
 
-  def shoot(byPlayerNumber: Int, address: BoardAddress): Option[Ship] = {
-    (getPlayerBoard(getOtherPlayerNumber(byPlayerNumber)).shootAtAddress(address)).orElse {
-      currentTurnBelongsTo = getOtherPlayerNumber(byPlayerNumber)
-      None
+  def shoot(byPlayerNumber: Int, address: BoardAddress): Either[BattleshipGameError, Option[Ship]] = {
+    if (currentTurnBelongsTo != byPlayerNumber) {
+      Left(BattleshipGameErrors.turnBelongsToOtherPlayer)
+    } else {
+      Right(
+        (getPlayerBoard(getOtherPlayerNumber(byPlayerNumber)).shootAtAddress(address)).orElse {
+          currentTurnBelongsTo = getOtherPlayerNumber(byPlayerNumber)
+          None
+        }
+      )
     }
   }
 }
