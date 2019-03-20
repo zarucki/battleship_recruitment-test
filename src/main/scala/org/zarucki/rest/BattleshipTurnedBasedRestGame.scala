@@ -1,5 +1,5 @@
 package org.zarucki.rest
-import org.zarucki.game.battleship.{BattleshipGame, BoardAddress, HitCommand, HitReport}
+import org.zarucki.game.battleship.{BattleshipGame, BoardAddress}
 
 import scala.util.Try
 
@@ -16,7 +16,11 @@ class BattleshipTurnedBasedRestGame(battleshipGame: BattleshipGame) extends Turn
   override def issueCommand(byPlayerNumber: Int, command: HitCommand): Either[GameError, HitReport] = {
     positionToXY(command.position).flatMap { address =>
       if (battleshipGame.isBoardAddressWithinBoard(address)) {
-        Right(battleshipGame.shoot(byPlayerNumber, address))
+        val hitReport = battleshipGame.shoot(byPlayerNumber, address) match {
+          case Some(ship) => Hit(shipType = ship.name, sunken = ship.isSunk())
+          case None       => Miss
+        }
+        Right(hitReport)
       } else {
         Left(GameErrors.positionOutsideOfGamePlayArea)
       }

@@ -9,7 +9,6 @@ import com.softwaremill.session.SessionManager
 import com.typesafe.scalalogging.StrictLogging
 import io.circe.{Decoder, Encoder}
 import org.zarucki.game.GameServerLookup
-import org.zarucki.game.battleship.{HitCommand, HitReport}
 import org.zarucki.rest._
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
