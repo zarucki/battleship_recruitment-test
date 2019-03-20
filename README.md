@@ -33,7 +33,7 @@ architecture.
 be to allow players to place their ships on the gameboard? What new things 
 need to be implemented to make it work?**
 
-Placing ships is already implemented. Iwould have to add appropriate rest endpoints
+Placing ships is already implemented. I would have to add appropriate rest endpoints
 and adjust interfaces a little bit.
 
 **4. Assume that we have to fetch game ID from the external application. What challenges and
