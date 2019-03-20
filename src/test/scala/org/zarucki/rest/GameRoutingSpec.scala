@@ -124,7 +124,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     createGameAndGetValidSession { _ =>
       Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
         status shouldEqual StatusCodes.OK
-        responseAs[String] shouldEqual s"game state $game1UUIDPickedAtRandom"
+        responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(YourTurn)
         header(headerName).isDefined shouldEqual true
 
         Post(s"/game/$game1UUIDPickedAtRandom/join") ~> addHeader(header(headerName).get) ~> routes ~> check {
@@ -141,7 +141,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         Post(s"/game/$game2UUIDPickedAtRandom/join") ~> firstGameSessionTransform ~> routes ~> check {
           status shouldEqual StatusCodes.OK
           header(headerName).isEmpty shouldEqual true
-          responseAs[String] shouldEqual s"game state $game2UUIDPickedAtRandom"
+          responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(YourTurn)
         }
       }
     }
@@ -154,7 +154,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         header(headerName).flatMap(extractSession).value shouldEqual UserSession(
           userId = player2UUIDPickedAtRandom,
         )
-        responseAs[String] shouldEqual s"game state $game1UUIDPickedAtRandom"
+        responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(YourTurn)
       }
     }
   }

@@ -59,22 +59,32 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
                     case Some(existingSession) if gameServer.playerIdSet(existingSession.userId) =>
                       complete(StatusCodes.OK -> GameErrors.alreadyJoinedGame)
                     case existingSession =>
-                      if (!gameServer.isTherePlaceForAnotherPlayer) {
+                      if (gameServer.howManyPlayersCanStillJoin == 0) {
                         complete(StatusCodes.Forbidden -> GameErrors.gameFull)
                       } else {
-                        val otherPlayerSession = existingSession.getOrElse(sessionCreator.newSession())
+                        val playerSession = existingSession.getOrElse(sessionCreator.newSession())
 
-                        // TODO: If game server is for N players it does not mean yet that the game can start
+                        // TODO: potential racing / lost write problem
                         gameServerLookup.updateGameServer(
                           gameUUID,
-                          _.joinPlayer(otherPlayerSession.userId)
+                          _.joinPlayer(playerSession.userId)
                         )
 
-                        val result = complete(s"game state $gameUUID")
+                        val result = if (gameServer.howManyPlayersCanStillJoin > 1) {
+                          complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
+                        } else {
+                          gameServerLookup.getGameServerById(gameUUID).map {
+                            _.getGame().getStatus(gameServer.getPlayerNumber(playerSession.userId))
+                          } match {
+                            case Some(status) => complete(status)
+                            case None         => complete(StatusCodes.NotFound)
+                          }
+                        }
+
                         if (existingSession.isDefined) {
                           result
                         } else {
-                          setGameSession(otherPlayerSession) {
+                          setGameSession(playerSession) {
                             result
                           }
                         }
@@ -100,7 +110,7 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
                   requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>
                     logger.info("got session: " + session)
                     logger.info("got game state: " + gameServer)
-                    if (gameServer.isTherePlaceForAnotherPlayer) {
+                    if (gameServer.howManyPlayersCanStillJoin > 0) {
                       complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
                     } else {
                       complete(gameServer.getGame().getStatus(playerNumber))
@@ -143,8 +153,6 @@ case class TwoPlayersGameServer[Game](hostPlayerId: UniqueId, game: Game, otherP
 
   lazy val playerIdSet = Set(hostPlayerId) ++ otherPlayerId.toSet
 
-  def isTherePlaceForAnotherPlayer: Boolean = otherPlayerId.isEmpty
-
   override def joinPlayer(playerId: UniqueId): TwoPlayersGameServer[Game] = {
     copy(otherPlayerId = Some(playerId))
   }
@@ -157,11 +165,13 @@ case class TwoPlayersGameServer[Game](hostPlayerId: UniqueId, game: Game, otherP
       1
     }
   }
+
+  override def howManyPlayersCanStillJoin: Int = otherPlayerId.map(_ => 0).getOrElse(1)
 }
 
 trait MultiPlayerGameServer[GameServer <: MultiPlayerGameServer[GameServer, Game], Game] {
   def playerIdSet: Set[UniqueId]
-  def isTherePlaceForAnotherPlayer: Boolean
+  def howManyPlayersCanStillJoin: Int
   def joinPlayer(playerId: UniqueId): GameServer
   def getPlayerNumber(playerId: UniqueId): Int
   def getGame(): Game
