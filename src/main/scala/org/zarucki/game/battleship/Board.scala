@@ -16,15 +16,19 @@ class Board(sizeX: Int, sizeY: Int) {
   }
 
   def shootAtAddress(address: BoardAddress): Option[Ship] = {
-    getShipFromAddress(address).flatMap {
-      case (shipLocation, ship, segmentIndex) =>
-        if (ship.isShipSegmentDestroyed(segmentIndex)) {
-          None // TODO: return something to mark overkill?
-        } else {
-          val newShip = ship.shipWithTargetSegmentHit(segmentIndex)
-          placedShips = placedShips.updated(shipLocation, newShip)
-          Some(newShip)
-        }
+    if (addressIsOutside(address)) {
+      None
+    } else {
+      getShipFromAddress(address).flatMap {
+        case (shipLocation, ship, segmentIndex) =>
+          if (ship.isShipSegmentDestroyed(segmentIndex)) {
+            None // TODO: return something to mark overkill?
+          } else {
+            val newShip = ship.shipWithTargetSegmentHit(segmentIndex)
+            placedShips = placedShips.updated(shipLocation, newShip)
+            Some(newShip)
+          }
+      }
     }
   }
 

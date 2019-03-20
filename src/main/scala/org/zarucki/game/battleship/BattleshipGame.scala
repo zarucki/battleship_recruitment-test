@@ -44,7 +44,11 @@ class BattleshipGame(sizeX: Int, sizeY: Int) {
     currentPlayerBoard.placeShip(shipLocation, ship)
   }
 
-  def whosTurnIsIt: Int = currentTurnBelongsTo
+  def whoseTurnIsIt: Int = currentTurnBelongsTo
+
+  def isBoardAddressWithinBoard(boardAddress: BoardAddress): Boolean = {
+    !playerBoards.head.addressIsOutside(boardAddress)
+  }
 
   def getScore(playerNumber: Int): Int = ???
 

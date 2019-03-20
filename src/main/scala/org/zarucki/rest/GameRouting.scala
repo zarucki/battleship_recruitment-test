@@ -100,8 +100,12 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
               put {
                 entity(as[TCommand]) { command =>
                   requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>
-                    // not your turn / invalid move / game already completed
-                    complete(gameServer.getGame().issueCommand(playerNumber, command))
+                    gameServer.getGame().issueCommand(playerNumber, command) match {
+                      case Right(commandResult) => complete(commandResult)
+                      case Left(gameError) =>
+                        logger.warn(s"${session.userId} issued invalid command: " + command)
+                        complete(gameError)
+                    }
                   }
                 }
               } ~
