@@ -10,4 +10,6 @@ class PreSetBattleshipGame(sizeX: Int, sizeY: Int) extends BattleshipGame(sizeX 
   placeShip(1, ShipLocation(West, BoardAddress(7, 3)), OneLinerShip(3))
   placeShip(1, ShipLocation(West, BoardAddress(8, 6)), OneLinerShip(2))
   placeShip(1, ShipLocation(West, BoardAddress(9, 9)), OneLinerShip(1))
+
+  startGame()
 }

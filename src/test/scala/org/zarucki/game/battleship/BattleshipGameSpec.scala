@@ -44,6 +44,21 @@ class BattleshipGameSpec extends BaseSpec {
     )
   }
 
+  it should "not allow placing ship after starting the game" in {
+    val game = new BattleshipGame(sizeX = 10, sizeY = 10)
+    game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip(4)).isRight shouldEqual true
+    game.startGame()
+    game.placeShip(0, ShipLocation(West, BoardAddress(0, 0)), OneLinerShip(4)) shouldEqual Left(
+      BattleshipGameErrors.cannotPlaceShipsAfterGameStarted
+    )
+  }
+
+  it should "not allow shooting before starting the game" in {
+    val game = new BattleshipGame(sizeX = 10, sizeY = 10)
+    game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip(4)).isRight shouldEqual true
+    game.shoot(1, BoardAddress(0, 0)) shouldEqual Left(BattleshipGameErrors.cannotShootBeforeStartingTheGame)
+  }
+
   it should "allow for initial setup" in {
     val game = new BattleshipGame(sizeX = 10, sizeY = 10)
 
@@ -61,6 +76,7 @@ class BattleshipGameSpec extends BaseSpec {
   it should "return miss if shooting again place that was hit before" in {
     val game = new BattleshipGame(sizeX = 10, sizeY = 10)
     game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
+    game.startGame()
     game.shoot(1, BoardAddress(0, 0)) shouldEqual Right(Some(OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0))))
     game.shoot(1, BoardAddress(0, 0)) shouldEqual Right(None)
   }
@@ -68,6 +84,7 @@ class BattleshipGameSpec extends BaseSpec {
   it should "sink the ship after shooting all segments" in {
     val game = new BattleshipGame(sizeX = 10, sizeY = 10)
     game.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
+    game.startGame()
     game.shoot(1, BoardAddress(0, 0)) shouldEqual Right(Some(OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0))))
     game.shoot(1, BoardAddress(0, 3)) shouldEqual Right(Some(OneLinerShip.fourDecker.copy(segmentsOnFire = Set(0, 3))))
     game.shoot(1, BoardAddress(0, 1)) shouldEqual Right(

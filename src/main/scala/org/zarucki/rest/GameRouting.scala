@@ -38,8 +38,7 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGam
         post {
           val session = sessionCreator.newSession()
 
-          // TODO: what if someone comes with already valid session
-          // TODO: should one person be able to start multiple games at once?
+          // TODO: what if someone comes with already valid session, should one person be able to start multiple games at once?
           // TODO: check if we overwritten something? what to do then?
           val newGameId = gameServerLookup.startNewGameServer(newGameServerForPlayer(session.userId))
 

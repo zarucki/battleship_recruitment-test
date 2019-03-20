@@ -49,6 +49,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     testBattleshipGame = new BattleshipGame(10, 10)
     testBattleshipRestGame = new BattleshipTurnedBasedRestGame(testBattleshipGame)
     testBattleshipGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
+    testBattleshipGame.startGame()
   }
 
   override protected def afterEach(): Unit =

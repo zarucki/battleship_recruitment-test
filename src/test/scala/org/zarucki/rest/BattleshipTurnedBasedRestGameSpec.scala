@@ -9,11 +9,12 @@ class BattleshipTurnedBasedRestGameSpec extends BaseSpec with BeforeAndAfterEach
 
   override protected def beforeEach(): Unit = {
     underlyingGame = new BattleshipGame(sizeX = 10, sizeY = 10)
+    underlyingGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
+    underlyingGame.startGame()
     sut = new BattleshipTurnedBasedRestGame(underlyingGame)
   }
 
   it should "sink the ship after shooting all segments using string position" in {
-    underlyingGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
     sut.issueCommand(1, HitCommand("A1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
     sut.issueCommand(1, HitCommand("B1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
     sut.issueCommand(1, HitCommand("C1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
@@ -21,14 +22,12 @@ class BattleshipTurnedBasedRestGameSpec extends BaseSpec with BeforeAndAfterEach
   }
 
   it should "still be the player turn if he hits the ship" in {
-    underlyingGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
     sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YourTurn)
     sut.issueCommand(1, HitCommand("A1")) shouldEqual Right(Hit(OneLinerShip.fourDecker.name, sunken = false))
     sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YourTurn)
   }
 
   it should "switch turn to other player if the current player misses" in {
-    underlyingGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
     sut.getStatus(1) shouldEqual TurnedBasedGameStatus(YourTurn)
     sut.issueCommand(1, HitCommand("A2")) shouldEqual Right(Miss)
     sut.getStatus(1) shouldEqual TurnedBasedGameStatus(WaitingForOpponentMove)

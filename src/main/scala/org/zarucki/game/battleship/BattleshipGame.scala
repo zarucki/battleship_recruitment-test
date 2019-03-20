@@ -5,6 +5,8 @@ object BattleshipGameErrors {
   val shipDoesNotFitInBoard = BattleshipGameError("Ship does not fit in the board.")
   val shipCollidesWithOtherAlreadyPlacedShip = BattleshipGameError("Ship collides with other already placed ship.")
   val turnBelongsToOtherPlayer = BattleshipGameError("Turn belongs to other player.")
+  val cannotShootBeforeStartingTheGame = BattleshipGameError("Cannot shoot before staring the game.")
+  val cannotPlaceShipsAfterGameStarted = BattleshipGameError("Cannot place ships after game started.")
 }
 
 case class BattleshipGameError(msg: String)
@@ -17,13 +19,21 @@ case class BattleshipGameError(msg: String)
 class BattleshipGame(sizeX: Int, sizeY: Int) {
   // by default the second player starts
   private var currentTurnBelongsTo: Int = 1
+  private var gameStarted: Boolean = false
 
   private val playerBoards = Array(new Board(sizeX, sizeY), new Board(sizeX, sizeY))
 
-  // TODO: don't allow placing ships after game starts?
   def placeShip(currentPlayerNumber: Int, shipLocation: ShipLocation, ship: Ship): Either[BattleshipGameError, Unit] = {
-    val currentPlayerBoard = getPlayerBoard(currentPlayerNumber)
-    currentPlayerBoard.placeShip(shipLocation, ship)
+    if (gameStarted) {
+      Left(BattleshipGameErrors.cannotPlaceShipsAfterGameStarted)
+    } else {
+      val currentPlayerBoard = getPlayerBoard(currentPlayerNumber)
+      currentPlayerBoard.placeShip(shipLocation, ship)
+    }
+  }
+
+  def startGame(): Unit = {
+    gameStarted = true
   }
 
   def whoseTurnIsIt: Int = currentTurnBelongsTo
@@ -44,7 +54,9 @@ class BattleshipGame(sizeX: Int, sizeY: Int) {
   }
 
   def shoot(byPlayerNumber: Int, address: BoardAddress): Either[BattleshipGameError, Option[Ship]] = {
-    if (currentTurnBelongsTo != byPlayerNumber) {
+    if (!gameStarted) {
+      Left(BattleshipGameErrors.cannotShootBeforeStartingTheGame)
+    } else if (currentTurnBelongsTo != byPlayerNumber) {
       Left(BattleshipGameErrors.turnBelongsToOtherPlayer)
     } else {
       Right(
