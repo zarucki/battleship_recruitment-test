@@ -49,6 +49,11 @@ libraryDependencies ++= Seq(
 )
 
 libraryDependencies ++= Seq(
+	"org.typelevel" %% "cats-core" % "1.4.0" withSources() withJavadoc(),
+	"org.typelevel" %% "cats-effect" % "0.10.1" withSources() withJavadoc()
+)
+
+libraryDependencies ++= Seq(
   "io.circe" %% "circe-core",
   "io.circe" %% "circe-generic",
   "io.circe" %% "circe-generic-extras",

@@ -6,11 +6,11 @@ import akka.http.scaladsl.model.headers.Host
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Route
 import akka.stream.scaladsl.Sink
+import cats.effect.IO
 import com.softwaremill.session.{HeaderConfig, SessionConfig, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import com.softwaremill.session.SessionOptions._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
-import io.circe.{Decoder, Encoder}
 import io.circe.generic.auto._
 import io.circe.syntax._
 import org.scalatest.BeforeAndAfterEach
@@ -35,11 +35,13 @@ class BattleshipGameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
   var testBattleshipRestGame: BattleshipTurnedBasedRestGame = _
 
   val testGameServerLookup = new InMemoryGameServerLookup[TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] {
-    override def startNewGameServer(newGame: TwoPlayersGameServer[BattleshipTurnedBasedRestGame]): UniqueId = {
-      val newGameId = gameIdsToGive.head
-      gameIdsToGive = gameIdsToGive.tail
-      concurrentStorage.put(newGameId, newGame)
-      newGameId
+    override def startNewGameServer(newGame: TwoPlayersGameServer[BattleshipTurnedBasedRestGame]): IO[UniqueId] = {
+      IO {
+        val newGameId = gameIdsToGive.head
+        gameIdsToGive = gameIdsToGive.tail
+        concurrentStorage.put(newGameId, newGame)
+        newGameId
+      }
     }
   }
 
@@ -53,8 +55,9 @@ class BattleshipGameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     testBattleshipGame.startGame()
   }
 
-  override protected def afterEach(): Unit =
-    testGameServerLookup.clear()
+  override protected def afterEach(): Unit = {
+    testGameServerLookup.clear().unsafeRunSync()
+  }
 
   implicit val testSessionManager =
     new SessionManager[UserSession](
@@ -80,8 +83,10 @@ class BattleshipGameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         }
       }
 
-      override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] =
+      override val gameServerLookup
+        : GameServerLookup[IO, UniqueId, TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] = {
         testGameServerLookup
+      }
 
       override def newGameServerForPlayer(
           userId: UniqueId
@@ -104,6 +109,7 @@ class BattleshipGameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
 
       testGameServerLookup
         .getGameServerById(game1UUIDPickedAtRandom)
+        .unsafeRunSync()
         .value shouldEqual TwoPlayersGameServer[BattleshipTurnedBasedRestGame](
         hostPlayerId = player1UUIDPickedAtRandom,
         game = testBattleshipRestGame,
@@ -223,10 +229,10 @@ class BattleshipGameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     }
   }
 
-  it should "return not found when trying to access non existing game" in {
+  it should "return forbidden when trying to access non existing game" in {
     createGameAndGetValidSession { addSessionTransform =>
       Get(s"/game/${UUID.randomUUID()}") ~> addSessionTransform ~> routes ~> check {
-        status shouldEqual StatusCodes.NotFound
+        status shouldEqual StatusCodes.Forbidden
       }
     }
   }

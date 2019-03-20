@@ -1,5 +1,6 @@
 package org.zarucki
 package rest
+import cats.effect.IO
 import com.softwaremill.session.{HeaderConfig, SessionConfig, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import org.zarucki.game.battleship.PreSetBattleshipGame
@@ -15,7 +16,7 @@ class BattleshipGameRouting(appConfig: AppConfig)(implicit executionContext: Exe
 
   override implicit def sessionCreator: SessionCreator = new SessionCreator {}
 
-  override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] = {
+  override val gameServerLookup: GameServerLookup[IO, UniqueId, TwoPlayersGameServer[BattleshipTurnedBasedRestGame]] = {
     new InMemoryGameServerLookup[TwoPlayersGameServer[BattleshipTurnedBasedRestGame]]
   }
 
