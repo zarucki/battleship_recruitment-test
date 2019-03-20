@@ -45,8 +45,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % akkaHttpVersion,
   "com.typesafe.akka" %% "akka-http-testkit" % akkaHttpVersion % Test,
   "de.heikoseeberger" %% "akka-http-circe" % "1.25.2",
-  "com.softwaremill.akka-http-session" %% "core" % akkaHttpSession,
-  "com.softwaremill.akka-http-session" %% "jwt"  % akkaHttpSession
+  "com.softwaremill.akka-http-session" %% "core" % akkaHttpSession
 )
 
 libraryDependencies ++= Seq(
