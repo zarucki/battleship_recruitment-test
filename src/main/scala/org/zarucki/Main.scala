@@ -7,8 +7,9 @@ import akka.http.scaladsl.server.{Directive, ExceptionHandler, RejectionHandler}
 import akka.stream.ActorMaterializer
 import com.softwaremill.session.{RefreshTokenStorage, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
+import io.circe.{Decoder, Encoder}
 import org.zarucki.game.GameServerLookup
-import org.zarucki.game.battleship.BattleshipGame
+import org.zarucki.game.battleship.{BattleshipGame, HitCommand, HitReport}
 import org.zarucki.rest.{GameRouting, SessionCreator, TwoPlayersGameServer, UserSession}
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
@@ -25,7 +26,8 @@ object Main extends App with StrictLogging {
 
   val appConfig: AppConfig = AppConfig(httpRestApiPort = 8080)
 
-  val gamingRoutes = new GameRouting[TwoPlayersGameServer[BattleshipGame], BattleshipGame] with StrictLogging {
+  val gamingRoutes = new GameRouting[TwoPlayersGameServer[BattleshipGame], BattleshipGame, HitCommand, HitReport]
+  with StrictLogging {
     override implicit def executor: ExecutionContext = executionContext
     override implicit def sessionManager: SessionManager[UserSession] = ???
     override implicit def sessionCreator: SessionCreator = ???
@@ -36,6 +38,9 @@ object Main extends App with StrictLogging {
     override def newGameServerForPlayer(
         userId: UniqueId
     ): TwoPlayersGameServer[BattleshipGame] = ???
+    override implicit def commandEncoder: Decoder[HitCommand] = ???
+    override implicit def commandResultDecoder: Encoder[HitReport] =
+      ???
   }
 
   val bindingFuture = Http().bindAndHandle(

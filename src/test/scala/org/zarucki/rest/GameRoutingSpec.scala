@@ -3,16 +3,18 @@ package org.zarucki.rest
 import java.util.UUID
 
 import akka.http.scaladsl.model.headers.Host
-import akka.http.scaladsl.model.{HttpHeader, StatusCodes}
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Route
 import akka.stream.scaladsl.Sink
 import com.softwaremill.session.{HeaderConfig, SessionConfig, SessionManager}
 import com.typesafe.scalalogging.StrictLogging
 import com.softwaremill.session.SessionOptions._
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.{Decoder, Encoder}
 import io.circe.generic.auto._
+import io.circe.syntax._
 import org.scalatest.BeforeAndAfterEach
-import org.zarucki.game.battleship.BattleshipGame
+import org.zarucki.game.battleship._
 import org.zarucki._
 import org.zarucki.game.{GameServerLookup, InMemoryGameServerLookup}
 
@@ -44,6 +46,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     gameIdsToGive = List(game1UUIDPickedAtRandom, game2UUIDPickedAtRandom, UUID.randomUUID())
     userIdsToGive = List(player1UUIDPickedAtRandom, player2UUIDPickedAtRandom, UUID.randomUUID())
     testBattleshipGame = new BattleshipGame(10, 10)
+    testBattleshipGame.placeShip(0, ShipLocation(North, BoardAddress(0, 0)), OneLinerShip.fourDecker)
   }
 
   override protected def afterEach(): Unit =
@@ -56,24 +59,30 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
         .copy(sessionHeaderConfig = HeaderConfig(headerName, headerName))
     )
 
-  val routes = Route.seal(new GameRouting[TwoPlayersGameServer[BattleshipGame], BattleshipGame] with StrictLogging {
-    override implicit val sessionManager: SessionManager[UserSession] = testSessionManager
-    override implicit val executor: ExecutionContext = testExecutor
-    override implicit val sessionCreator: SessionCreator = new SessionCreator {
-      override def newSession(): UserSession = {
-        val newUserId = userIdsToGive.head
-        userIdsToGive = userIdsToGive.tail
-        UserSession(userId = newUserId)
+  val routes = Route.seal(
+    new GameRouting[TwoPlayersGameServer[BattleshipGame], BattleshipGame, HitCommand, HitReport] with StrictLogging {
+      override implicit val sessionManager: SessionManager[UserSession] = testSessionManager
+      override implicit val executor: ExecutionContext = testExecutor
+      override implicit val sessionCreator: SessionCreator = new SessionCreator {
+        override def newSession(): UserSession = {
+          val newUserId = userIdsToGive.head
+          userIdsToGive = userIdsToGive.tail
+          UserSession(userId = newUserId)
+        }
       }
-    }
-    override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipGame]] =
-      testGameServerLookup
-    override def newGameServerForPlayer(
-        userId: UniqueId
-    ): TwoPlayersGameServer[BattleshipGame] = {
-      new TwoPlayersGameServer(hostPlayerId = userId, game = testBattleshipGame)
-    }
-  }.routes)
+      override val gameServerLookup: GameServerLookup[UniqueId, TwoPlayersGameServer[BattleshipGame]] =
+        testGameServerLookup
+      override def newGameServerForPlayer(
+          userId: UniqueId
+      ): TwoPlayersGameServer[BattleshipGame] = {
+        new TwoPlayersGameServer(hostPlayerId = userId, game = testBattleshipGame)
+      }
+      override implicit def commandEncoder: Decoder[HitCommand] = {
+        Decoder[HitCommand](io.circe.generic.auto.exportDecoder[HitCommand].instance)
+      }
+      override implicit def commandResultDecoder: Encoder[HitReport] = HitReport.encodeHitReport
+    }.routes
+  )
 
   it should "set correct header when sent POST to /game" in {
     Post("/game") ~> Host(serverHostName, serverPort) ~> routes ~> check {
@@ -169,12 +178,7 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
 
         responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = AwaitingPlayers)
 
-        val completionStage = responseEntity
-          .getDataBytes()
-          .map(_.utf8String)
-          .runWith(Sink.reduce[String](_ + _), materializer)
-
-        Await.result(completionStage, Duration.Inf) shouldEqual "{\"gameStatus\":\"AWAITING_PLAYERS\"}"
+        responseEntityAsString(responseEntity) shouldEqual "{\"gameStatus\":\"AWAITING_PLAYERS\"}"
       }
     }
   }
@@ -225,6 +229,138 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
     }
   }
 
+  it should "return Hit if player shoots right" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A1").asJson.toString())
+        ) ~>
+          addHeader(header(headerName).get) ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+
+          responseAs[HitReport] shouldEqual Hit("FOUR_DECKER", sunken = false)
+        }
+      }
+    }
+  }
+
+  it should "return Hit if player shoots right checking string" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A1").asJson.toString())
+        ) ~>
+          addHeader(header(headerName).get) ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+
+          responseEntityAsString(responseEntity) shouldEqual """{"shipType":"FOUR_DECKER","sunken":false,"result":"HIT"}"""
+        }
+      }
+    }
+  }
+
+  it should "return Miss if hits the same spot again" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        val player2SessionHeader = header(headerName).get
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A1").asJson.toString())
+        ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+          Put(
+            s"/game/$game1UUIDPickedAtRandom",
+            HttpEntity(ContentTypes.`application/json`, HitCommand("A1").asJson.toString())
+          ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+            status shouldEqual StatusCodes.OK
+            responseAs[HitReport] shouldEqual Miss
+          }
+        }
+      }
+    }
+  }
+
+  it should "return Miss if hits the " in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        val player2SessionHeader = header(headerName).get
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A1").asJson.toString())
+        ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+          Put(
+            s"/game/$game1UUIDPickedAtRandom",
+            HttpEntity(ContentTypes.`application/json`, HitCommand("B1").asJson.toString())
+          ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+            Put(
+              s"/game/$game1UUIDPickedAtRandom",
+              HttpEntity(ContentTypes.`application/json`, HitCommand("C1").asJson.toString())
+            ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+              Put(
+                s"/game/$game1UUIDPickedAtRandom",
+                HttpEntity(ContentTypes.`application/json`, HitCommand("D1").asJson.toString())
+              ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+                status shouldEqual StatusCodes.OK
+                responseAs[HitReport] shouldEqual Hit("FOUR_DECKER", sunken = true)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  it should "return Miss if player shoots wrong" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A2").asJson.toString())
+        ) ~>
+          addHeader(header(headerName).get) ~> routes ~> check {
+          status shouldEqual StatusCodes.OK
+
+          responseAs[HitReport] shouldEqual Miss
+        }
+      }
+    }
+  }
+
+  it should "still be player turn if hits correctly" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        val player2SessionHeader = header(headerName).get
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A1").asJson.toString())
+        ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+          Get(s"/game/$game1UUIDPickedAtRandom") ~> addHeader(player2SessionHeader) ~> routes ~> check {
+            status shouldEqual StatusCodes.OK
+            responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = YourTurn)
+          }
+        }
+      }
+    }
+  }
+
+  it should "be turn of other player when player missed" in {
+    createGameAndGetValidSession { _ =>
+      Post(s"/game/$game1UUIDPickedAtRandom/join") ~> routes ~> check {
+        val player2SessionHeader = header(headerName).get
+        Put(
+          s"/game/$game1UUIDPickedAtRandom",
+          HttpEntity(ContentTypes.`application/json`, HitCommand("A2").asJson.toString())
+        ) ~> addHeader(player2SessionHeader) ~> routes ~> check {
+          Get(s"/game/$game1UUIDPickedAtRandom") ~> addHeader(player2SessionHeader) ~> routes ~> check {
+            status shouldEqual StatusCodes.OK
+            responseAs[TurnedBasedGameStatus] shouldEqual TurnedBasedGameStatus(gameStatus = WaitingForOpponentMove)
+          }
+        }
+      }
+    }
+  }
+
   private def extractSession(httpHeader: HttpHeader): Option[UserSession] =
     oneOff.clientSessionManager.decode(httpHeader.value()).toOption
 
@@ -235,4 +371,13 @@ class GameRoutingSpec extends BaseRouteSpec with BeforeAndAfterEach {
       sessionHeader.isDefined shouldEqual true
       body(addHeader(sessionHeader.get))
     }
+
+  private def responseEntityAsString(responseEntity: HttpEntity): String = {
+    val completionStage = responseEntity
+      .getDataBytes()
+      .map(_.utf8String)
+      .runWith(Sink.reduce[String](_ + _), materializer)
+
+    Await.result(completionStage, Duration.Inf)
+  }
 }

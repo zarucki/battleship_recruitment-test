@@ -9,16 +9,19 @@ import com.softwaremill.session.SessionDirectives._
 import com.softwaremill.session.SessionOptions._
 import com.typesafe.scalalogging.Logger
 import de.heikoseeberger.akkahttpcirce.FailFastCirceSupport._
+import io.circe.{Decoder, Encoder}
 import io.circe.generic.auto._
 import org.zarucki.game.GameServerLookup
 import org.zarucki._
 
 import scala.concurrent.ExecutionContext
 
-trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, Game], Game <: RestGame]
+trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, TGame], TGame <: RestGame[TCommand, TCommandResult], TCommand, TCommandResult]
     extends SessionSupport[UserSession] {
   protected val logger: Logger
 
+  implicit def commandEncoder: Decoder[TCommand]
+  implicit def commandResultDecoder: Encoder[TCommandResult]
   implicit def executor: ExecutionContext
   implicit def sessionCreator: SessionCreator
 
@@ -83,22 +86,24 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, Game], Game 
             pathEndOrSingleSlash {
               // TODO: when game finished returned that game is done
               put {
-                logger.info(s"PUT /game/$gameUUID")
+                entity(as[TCommand]) { command =>
+                  logger.info(s"PUT /game/$gameUUID")
 
-                requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer) =>
-                  complete(StatusCodes.OK)
+                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>
+                    complete(gameServer.getGame().issueCommand(playerNumber, command))
+                  }
                 }
               } ~
                 get {
                   logger.info(s"GET /game/$gameUUID")
 
-                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer) =>
+                  requireSessionAndCheckIfPlayerIsPartOfGame(gameUUID) { (session, gameServer, playerNumber) =>
                     logger.info("got session: " + session)
                     logger.info("got game state: " + gameServer)
                     if (gameServer.isTherePlaceForAnotherPlayer) {
                       complete(new TurnedBasedGameStatus(gameStatus = AwaitingPlayers))
                     } else {
-                      complete(gameServer.getGame().getStatus(gameServer.getPlayerNumber(session.userId)))
+                      complete(gameServer.getGame().getStatus(playerNumber))
                     }
                   }
                 }
@@ -112,12 +117,13 @@ trait GameRouting[TGameServer <: MultiPlayerGameServer[TGameServer, Game], Game 
 
   protected def requireSessionAndCheckIfPlayerIsPartOfGame(
       gameId: UniqueId
-  ): Directive[(UserSession, TGameServer)] =
+  ): Directive[(UserSession, TGameServer, Int)] =
     requiredSession(oneOff, usingHeaders).flatMap { session =>
       gameServerLookup.getGameServerById(gameId) match {
-        case Some(gameServer) if gameServer.playerIdSet(session.userId) => tprovide((session, gameServer))
-        case Some(_)                                                    => reject(AuthorizationFailedRejection)
-        case None                                                       => reject()
+        case Some(gameServer) if gameServer.playerIdSet(session.userId) =>
+          tprovide((session, gameServer, gameServer.getPlayerNumber(session.userId)))
+        case Some(_) => reject(AuthorizationFailedRejection)
+        case None    => reject()
       }
     }
 }
