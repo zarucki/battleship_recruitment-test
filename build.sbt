@@ -1,3 +1,5 @@
+import sbt._
+
 name := "battleships_rest_recruitment_task"
 
 version := "0.1"
@@ -53,3 +55,8 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic-extras",
   "io.circe" %% "circe-parser"
 ).map(_ % circeVersion)
+
+
+mainClass in Compile := Some("org.zarucki.Main")
+mainClass in assembly := some("org.zarucki.Main")
+herokuFatJar in Compile := Some((assemblyOutputPath in assembly).value)
